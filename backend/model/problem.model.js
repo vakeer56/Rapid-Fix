@@ -23,7 +23,7 @@ const problemSchema = new mongoose.Schema(
 
     address: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Address",
+        ref: "address",
         required: true,
     },
 
@@ -36,7 +36,7 @@ const problemSchema = new mongoose.Schema(
     rejected_workers: [
         {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: "user",
         },
     ],
 },
