@@ -7,22 +7,28 @@ const addressSchema = new Schema({
     },
     address:{
         type:String,
+        required: true
         
     },
     area: {
-        type: String
+        type: String,
+        required: true
     },
     city: {
         type: String,
+        required: true
     },
     district: {
-        type: String
+        type: String,
+        required: true
     },
     state: {
         type: String,
+        required: true
     },
     pin_code:{
         type:Number,
+        required: true
     }        
 });
 const addressModel = model("address",addressSchema);

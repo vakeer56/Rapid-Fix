@@ -2,13 +2,16 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 const userSchema = new Schema({
     name: {
-        type: String
+        type: String,
+        required: true
     },
     age: {
         type: Number,
+        required: true
     },
     gender: {
         type: String,
+        required: true
     },
     stored_addresses: {
         type: [Schema.Types.ObjectId], 
@@ -19,10 +22,12 @@ const userSchema = new Schema({
         ref: "address"
     },
     email: {
-        type: String
+        type: String,
+        required: true
     },
     phone: {
-        type: String
+        type: String,
+        required: true
     }
 });
 
