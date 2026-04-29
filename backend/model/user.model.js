@@ -12,7 +12,8 @@ const userSchema = new Schema({
     },
     stored_addresses: {
         type: [Schema.Types.ObjectId], 
-        ref: "address" },
+        ref: "address" 
+    },
     defaultAddress : {
         type: Schema.Types.ObjectId,
         ref: "address"
