@@ -38,6 +38,11 @@ const workersSchema = new mongoose.Schema(
         verificationStatus: {
             type: Boolean,
             default: false
+        },
+        firebaseUid: {
+            type: String,    
+            required: true,
+            unique: true
         }
 });      
 
