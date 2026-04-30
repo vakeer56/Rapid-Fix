@@ -1,5 +1,4 @@
-import mongoose from "mongoose";
-
+const mongoose = require('mongoose')
 const problemSchema = new mongoose.Schema(
 {
     picture: {
@@ -30,7 +29,7 @@ const problemSchema = new mongoose.Schema(
     status: {
         type: String,
         enum: ["unresolved", "pending"],
-        default: "unresolved",
+        default: "pending",
     },
 
     rejected_workers: [
@@ -39,6 +38,11 @@ const problemSchema = new mongoose.Schema(
         ref: "user",
         },
     ],
+
+    urgency: {
+        type: Boolean,
+        default: false
+    }
 },
     { timestamps: true }
 );
