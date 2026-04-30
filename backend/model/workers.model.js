@@ -32,9 +32,6 @@ const workersSchema = new mongoose.Schema(
         located_address: {
             type: String
         },
-        located_area: {
-            type: String
-        },
         verificationStatus: {
             type: Boolean,
             default: false
