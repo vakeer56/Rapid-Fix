@@ -36,6 +36,12 @@ const workersSchema = new mongoose.Schema(
             type: Boolean,
             default: false
         },
+        accepted_problems:[
+            {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Problem",
+            }
+        ],
         firebaseUid: {
             type: String,    
             required: true,
