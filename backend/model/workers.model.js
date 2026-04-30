@@ -16,7 +16,7 @@ const workersSchema = new mongoose.Schema(
             required: true
         },
         rating: {
-            average: {
+            totalSum: {
                 type: Number,
                 default: 0
             },
