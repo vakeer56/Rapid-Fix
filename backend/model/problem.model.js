@@ -28,14 +28,14 @@ const problemSchema = new mongoose.Schema(
 
     status: {
         type: String,
-        enum: ["unresolved", "pending"],
+        enum: ["unresolved", "pending", "resolved"],
         default: "pending",
     },
 
     rejected_workers: [
         {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "user",
+        ref: "workers",
         },
     ],
 
