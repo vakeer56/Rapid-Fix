@@ -32,6 +32,12 @@ const problemSchema = new mongoose.Schema(
         default: "pending",
     },
 
+    assigned_worker: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "workers",
+        default: null
+    },
+
     rejected_workers: [
         {
         type: mongoose.Schema.Types.ObjectId,
@@ -47,4 +53,6 @@ const problemSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-export default mongoose.model("Problem", problemSchema);
+const problemModel = mongoose.model("Problem", problemSchema);
+
+module.exports = problemModel;
