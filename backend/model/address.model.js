@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Schema } = mongoose;
+const { Schema, model } = mongoose;
 const addressSchema = new Schema({
     belong_to : {
         type: Schema.Types.ObjectId,
