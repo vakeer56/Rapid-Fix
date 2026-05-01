@@ -28,6 +28,12 @@ const workerAcceptProblem = async (req, res) => {
             });
         }
 
+        await workers.findByIdAndUpdate(
+            workerId,
+            {
+                $addToSet: { accepted_problems: problemId } // avoids duplicates
+            }
+        );
         return res.status(200).json({
             success: true,
             message: "Problem accepted successfully",
@@ -62,7 +68,9 @@ const userRejectWorker = async (req, res) => {
         problem.assigned_worker = null;
         problem.status = "pending";
 
-        await problem.save();
+        await workers.findByIdAndUpdate(workerId, {
+            $pull: { accepted_problems: problemId }
+        });
 
         return res.status(200).json({
             success: true,
@@ -94,9 +102,10 @@ const userAcceptWorker = async (req, res) => {
                 message: "Invalid worker"
             });
         }
-        await workers.findByIdAndUpdate(workerId, {
-            $addToSet: { accepted_problems: problemId }
-        });//?
+        
+        // await workers.findByIdAndUpdate(workerId, {
+        //     $addToSet: { accepted_problems: problemId }
+        // });//?
 
         return res.status(200).json({
             success: true,
