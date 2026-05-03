@@ -1,5 +1,7 @@
 const Problem = require('../model/problem.model');
+const Worker = require('../model/workers.model.js');
 const cloudinary = require('../config/cloudinary.js');
+const { worker } = require('cluster');
 
 exports.createProblem = async (req, res) => {
 
@@ -54,5 +56,49 @@ exports.createProblem = async (req, res) => {
     }
     catch(err) {
         res.status(400).json( { message: err.message } );
+    }
+}
+
+exports.resolveProblem = async (req, res) => {
+    try {
+        const {problemId} = req.params;
+
+        const problem = await Problem.findById(problemId);
+
+        if(!problem) {
+            res.status(404).json({
+                message: "Problem not found"
+            })
+        }
+
+        //Remove problem id from accepted problems in worker
+        if(problem.assigned_worker) {
+            
+            await Worker.findByIdAndUpdate(
+                problem.assigned_worker,
+                {
+                    $pull: {
+                        accepted_problems: problemId
+                    }
+                }
+            )
+        }
+
+        problem.assigned_worker = null;
+        problem.status = "resolved";
+
+        await problem.save();
+
+        res.status(200).json({
+            message: "problem resolved successfully!"
+        });
+
+    }
+    catch(err) {
+        res.status(500).json(
+            {
+                message: err.message
+            }
+        );
     }
 }

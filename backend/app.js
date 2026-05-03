@@ -8,7 +8,6 @@ const problemRoutes = require('../backend/routes/problem.Route.js');
 
 app.use(express.json());
 
-app.use('/problems', problemRoutes);
 
 connectDB();
 
@@ -20,6 +19,7 @@ const workerRoutes = require("./routes/worker.routes");
 
 
 app.use("/workers", workerRoutes);
+app.use('/problem', problemRoutes);
 
 app.listen(PORT, ()=> {
     console.log(`server running on port ${PORT}`)
