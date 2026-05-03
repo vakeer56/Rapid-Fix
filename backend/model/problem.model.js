@@ -1,12 +1,17 @@
 const mongoose = require('mongoose')
 const problemSchema = new mongoose.Schema(
 {
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "users"
+    },
+
     picture: {
       type: String, // URL
     },
 
     video: {
-      type: String, // URL (optional)
+        type: String, // URL
     },
 
     name: {
@@ -53,6 +58,10 @@ const problemSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+<<<<<<< HEAD
 const problemModel = mongoose.model("Problem", problemSchema);
 
+=======
+const problemModel = mongoose.model("problem", problemSchema);
+>>>>>>> varun
 module.exports = problemModel;

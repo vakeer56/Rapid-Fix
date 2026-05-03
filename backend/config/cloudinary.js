@@ -10,6 +10,4 @@ cloudinary.config(
     }
 )
 
-console.log(process.env.CLOUD_NAME);
-
 module.exports = cloudinary;
