@@ -39,7 +39,7 @@ const workersSchema = new mongoose.Schema(
         accepted_problems:[
             {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Problem",
+            ref: "problem",
             }
         ],
         firebaseUid: {

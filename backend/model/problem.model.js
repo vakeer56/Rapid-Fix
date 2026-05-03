@@ -1,12 +1,17 @@
 const mongoose = require('mongoose')
 const problemSchema = new mongoose.Schema(
 {
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "users"
+    },
+
     picture: {
       type: String, // URL
     },
 
     video: {
-      type: String, // URL (optional)
+        type: String, // URL
     },
 
     name: {
@@ -32,6 +37,12 @@ const problemSchema = new mongoose.Schema(
         default: "pending",
     },
 
+    accepted_worker: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "workers",
+    default: null
+    },
+
     rejected_workers: [
         {
         type: mongoose.Schema.Types.ObjectId,
@@ -47,4 +58,5 @@ const problemSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-export default mongoose.model("Problem", problemSchema);
+const problemModel = mongoose.model("problem", problemSchema);
+module.exports = problemModel;
