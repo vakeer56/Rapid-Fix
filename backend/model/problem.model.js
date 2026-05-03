@@ -58,10 +58,5 @@ const problemSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-<<<<<<< HEAD
-const problemModel = mongoose.model("Problem", problemSchema);
-
-=======
 const problemModel = mongoose.model("problem", problemSchema);
->>>>>>> varun
 module.exports = problemModel;
