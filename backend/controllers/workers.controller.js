@@ -67,6 +67,7 @@ const userRejectWorker = async (req, res) => {
 
         problem.assigned_worker = null;
         problem.status = "pending";
+        await problem.save();
 
         await workers.findByIdAndUpdate(workerId, {
             $pull: { accepted_problems: problemId }

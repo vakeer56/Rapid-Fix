@@ -66,9 +66,9 @@ exports.resolveProblem = async (req, res) => {
         const problem = await Problem.findById(problemId);
 
         if(!problem) {
-            res.status(404).json({
+            return res.status(404).json({
                 message: "Problem not found"
-            })
+            });
         }
 
         //Remove problem id from accepted problems in worker
@@ -89,7 +89,7 @@ exports.resolveProblem = async (req, res) => {
 
         await problem.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "problem resolved successfully!"
         });
 
