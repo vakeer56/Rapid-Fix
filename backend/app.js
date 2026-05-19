@@ -1,5 +1,8 @@
 const express = require('express');
 const connectDB = require("./config/db");
+const addressRouter = require("./routes/adressRoutes");
+const getProblemsRouter = require("./routes/getProblems");
+const reviewsRouter = require("./routes/reviews.route");
 const app = express();
 
 require('dotenv').config();
@@ -7,6 +10,9 @@ require('dotenv').config();
 const problemRoutes = require('../backend/routes/problem.Route.js');
 
 app.use(express.json());
+app.use('/address', addressRouter);
+app.use('/getProblems', getProblemsRouter);
+app.use('/reviews', reviewsRouter);
 
 
 connectDB();
