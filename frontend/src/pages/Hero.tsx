@@ -1,6 +1,21 @@
 import { ArrowRight, Wrench } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const Hero = () => {
+
+    const navigate = useNavigate();
+
+    const handleRaiseIssue = () =>{
+        const isAuthenticated = localStorage.getItem("token");
+
+        if(isAuthenticated){
+            navigate('/raise-issue');
+        }else{
+            navigate('/login');
+        }
+    }
+
+
   return (
     <section className="w-full min-h-screen flex items-center justify-center px-6 md:px-16 bg-gray-50">
       <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
@@ -25,7 +40,7 @@ const Hero = () => {
           </div>
           {/* Buttons */}
           <div className="flex flex-col sm:flex-row gap-4">
-            <button className="bg-blue-900 hover:bg-blue-500 transition-all duration-300 text-white px-6 py-3 rounded-4xl font-semibold flex items-center gap-2 shadow-md">
+            <button onClick={handleRaiseIssue} className="bg-blue-900 hover:bg-blue-500 transition-all duration-300 text-white px-6 py-3 rounded-4xl font-semibold flex items-center gap-2 shadow-md">
               Raise an Issue
               <ArrowRight size={18} />
             </button>
