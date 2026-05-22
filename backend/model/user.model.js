@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+
 const userSchema = new Schema({
     name: {
         type: String,
@@ -17,7 +18,7 @@ const userSchema = new Schema({
         type: [Schema.Types.ObjectId], 
         ref: "address" 
     },
-    defaultAddress : {
+    defaultAddress: {
         type: Schema.Types.ObjectId,
         ref: "address"
     },
@@ -33,10 +34,8 @@ const userSchema = new Schema({
         type: String,    
         required: true,
         unique: true
-    },
-
-    timestamps: true
-});
+    }
+}, { timestamps: true })
 
 const userModel = mongoose.model("users",userSchema);
 module.exports = userModel;
