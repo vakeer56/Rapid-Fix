@@ -10,6 +10,7 @@ const LandingPage = () => {
             <Hero/>
             <HowItWorks/>
             <CommonIssuesGrid/>
+            
         </div>
     )
 }
