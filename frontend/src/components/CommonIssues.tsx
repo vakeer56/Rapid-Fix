@@ -63,7 +63,7 @@ const CommonIssuesGrid = () => {
 
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900">
             Raise issues faster with
-            <span className="text-blue-900"> RapidFix</span>
+            <span className="text-blue-900"> Rapid</span><span className="text-orange-600">Fix</span>
           </h2>
 
           <p className="text-gray-600 mt-5 max-w-2xl mx-auto text-lg">
