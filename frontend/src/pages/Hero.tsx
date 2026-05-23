@@ -15,7 +15,7 @@ const Hero = () => {
           <div className="space-y-4">
             <h1 className="text-5xl md:text-6xl font-bold leading-tight text-gray-900">
               When local help doesn't answer,{" "}
-              <span className="text-blue-900"> RapidFix </span> does.
+              <span className="text-blue-900"> Rapid</span><span className="text-orange-600">Fix</span> does.
             </h1>
 
             <p className="text-lg text-gray-600 leading-relaxed max-w-xl">

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-
+import RapidFix from '../assets/RapidFix.png';
 interface NavLinkItem {
     label: string;
     href: string;
@@ -14,8 +14,9 @@ const NAV_LINKS: NavLinkItem[] = [
 
 const Navbar = ()=> {
     return (
-        <nav className="fixed top-5 left-20 right-20 z-50 bg-white/90 backdrop-blur-md border border-blue-100 rounded-4xl h-16 flex items-center justify-between px-8">            <Link to="/" className="text-2xl font-bold text-blue-900 no-underline">
-            Rapid Fix
+        <nav className="fixed top-5 left-20 right-20 z-50 bg-white/90 backdrop-blur-md border border-blue-100 rounded-4xl h-16 flex items-center justify-between px-8">            
+        <Link to="/" className="text-2xl font-bold text-blue-900 no-underline">
+            <img src={RapidFix} alt="RapudFix"  className="h-20"/>     
             </Link>
 
             {/* NAV-BARS */}
