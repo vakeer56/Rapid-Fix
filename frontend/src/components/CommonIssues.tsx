@@ -1,54 +1,49 @@
 // CommonIssuesGrid.tsx
+import fan from "../assets/fan.jpg";
+import tap from "../assets/tap.jpg";
+import waterheater from "../assets/waterheater.jpg";
+import waterpump from "../assets/waterpump.jpg";
+import waterpurifier from "../assets/waterfilter.jpg";
+import cctv from "../assets/cctv.jpg";
 
+import { useState } from "react";
 import {
-  Zap,
-  Droplets,
-  Car,
-  Hammer,
-  Laptop,
-  ShieldAlert,
+ 
   ArrowRight,
 } from "lucide-react";
+// import { set } from "mongoose";
+import Problem from "./Problem";
 
 const issues = [
   {
-    title: "Electrical Issues",
-    description: "Power failure, wiring issues, switch repairs",
-    icon: <Zap size={28} />,
+    title: "Water Pump Issues",
+    image: waterpump,
   },
-
+  
   {
-    title: "Plumbing Problems",
-    description: "Leakage, pipe blockage, tap repairs",
-    icon: <Droplets size={28} />,
+    title: "Tap Issues",
+    image: tap,
   },
-
   {
-    title: "Vehicle Assistance",
-    description: "Bike and car breakdown support",
-    icon: <Car size={28} />,
+    title: "Water Heater Issues",
+    image: waterheater,
   },
-
   {
-    title: "Carpentry Work",
-    description: "Furniture fixing and wood repairs",
-    icon: <Hammer size={28} />,
+    title: "Fan Issues",
+    image: fan,
   },
-
   {
-    title: "Tech Support",
-    description: "Laptop, router, and device setup",
-    icon: <Laptop size={28} />,
+    title: "Water Purifier Issues",
+    image: waterpurifier,
   },
-
   {
-    title: "Emergency Repairs",
-    description: "Urgent home and office maintenance",
-    icon: <ShieldAlert size={28} />,
+    title: "CCTV Issues",
+    image: cctv,
   },
 ];
 
 const CommonIssuesGrid = () => {
+  const [open, setopen] = useState(false);
   return (
     <section className="w-full py-24 px-6 md:px-16 bg-white">
       
@@ -63,7 +58,7 @@ const CommonIssuesGrid = () => {
 
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900">
             Raise issues faster with
-            <span className="text-blue-900"> Rapid</span><span className="text-orange-600">Fix</span>
+            <span className="text-blue-900"> Rapid<span className="text-orange-500">Fix</span></span>
           </h2>
 
           <p className="text-gray-600 mt-5 max-w-2xl mx-auto text-lg">
@@ -82,18 +77,24 @@ const CommonIssuesGrid = () => {
             >
 
               {/* Icon */}
-              <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-300">
+              {/* <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-300">
                 {issue.icon}
-              </div>
+              </div> */}
+
+                <img src={issue.image} alt={issue.title}  className=" w-full h-56 object-cover rounded-2xl"/> 
+
 
               {/* Content */}
               <h3 className="text-2xl font-semibold text-gray-900 mb-3">
                 {issue.title}
               </h3>
 
-              <p className="text-gray-600 leading-relaxed">
+              <button className="bg-blue-900 hover:bg-blue-600 transition-all duration-300 text-white px-6 py-2 rounded-4xl font-semibold flex items-center gap-3 shadow-lg">
+                Raise a New Issue
+              </button>
+              {/* <p className="text-gray-600 leading-relaxed">
                 {issue.description}
-              </p>
+              </p> */}
 
             </div>
           ))}
@@ -103,13 +104,14 @@ const CommonIssuesGrid = () => {
         {/* CTA Button */}
         <div className="flex justify-center mt-16">
 
-          <button className="bg-blue-900 hover:bg-blue-600 transition-all duration-300 text-white px-8 py-4 rounded-2xl font-semibold flex items-center gap-3 shadow-lg">
+          <button onClick={()=>setopen(true)} className="bg-blue-900 hover:bg-blue-600 transition-all duration-300 text-white px-8 py-4 rounded-4xl font-semibold flex items-center gap-3 shadow-lg">
             Raise a New Issue
             <ArrowRight size={20} />
           </button>
+          
 
         </div>
-
+          <Problem open= {open} setopen={setopen}></Problem>
       </div>
     </section>
   );
