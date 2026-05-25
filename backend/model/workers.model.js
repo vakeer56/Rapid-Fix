@@ -42,13 +42,27 @@ const workersSchema = new mongoose.Schema(
             ref: "problem",
             }
         ],
+        // sign in through firebase
         firebaseUid: {
             type: String,    
+            unique: true,
+            sparse: true
+        },
+        //Sign in thorough phone
+        phone: {
+            type: String,
             required: true,
             unique: true
-        }
+        }, 
+        authProvider: {
+            type: String,
+            enum: ["firebase", "twilio"],
+            default: "twilio",
+        },
 });      
 
 const workersModel = mongoose.model("workers", workersSchema);
 
 module.exports = workersModel;
+
+//firebase id is kept optional because userss signing in with phone dont have it.

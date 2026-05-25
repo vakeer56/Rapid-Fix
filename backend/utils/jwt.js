@@ -1,9 +1,12 @@
 const jwt = require("jsonwebtoken");
 
-const generateToken = (payload) => {
+const generateAccessToken = (payload) => {
 
     return jwt.sign(
-        payload,
+        {
+            ...payload,
+            tokenType:"access",
+        },
         process.env.JWT_SECRET,
         {
             expiresIn: process.env.JWT_EXPIRES_IN || "7d",
@@ -11,11 +14,24 @@ const generateToken = (payload) => {
     );
 };
 
+const generateSetupToken = (payload) => {
+    return jwt.sign({
+        ...payload,
+        tokenType:"setup",
+    },
+    process.env.JWT_SECRET,
+    {
+        expiresIn: process.env.JWT_SETUP_EXPIRES_IN || "15m",
+    }
+    );
+}
+
 const verifyToken = (token) => {
     return jwt.verify(token, process.env.JWT_SECRET);
 }
 
 module.exports = {
-    generateToken,
+    generateAccessToken,
+    generateSetupToken,
     verifyToken
 }

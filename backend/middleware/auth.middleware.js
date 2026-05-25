@@ -11,17 +11,23 @@ const authmiddleware = (req, res, next) => {
             });
         }
 
-        const token = authHeader.split(" ")[1];
+        const [bearer, token] = authHeader.split(" ");
 
-        if (!token) {
+        if (bearer !== "Bearer" || !token) {
             return res.status(401).json({
                 success: false,
-                message: "Token missing",
+                message: "Invalid authorization",
             });
         }
 
         const decoded = verifyToken(token);
 
+        if(decoded.tokenType !== "access"){
+            return res.status(401).json({
+                success: false,
+                message: "Access Token required"
+            });
+        }
         req.user = decoded;
         next();
     } catch (error) {

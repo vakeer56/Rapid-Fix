@@ -27,13 +27,19 @@ const userSchema = new Schema({
         required: true
     },
     phone: {
-        type: Number,
-        required: true
+        type: String,
+        required: true,
+        unique: true
     },
     firebaseUid: {
         type: String,    
-        required: true,
-        unique: true
+        unique: true,
+        sparse: true,
+    }, 
+    authProvider: {
+        type: String,
+        enum: ["firebase", "twilio"],
+        default: "twilio",
     }
 }, { timestamps: true })
 
