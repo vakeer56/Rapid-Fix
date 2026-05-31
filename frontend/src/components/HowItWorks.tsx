@@ -30,7 +30,7 @@ const HowItWorks = () => {
   return (
     <section
       id="how-it-works"
-      className="w-full py-24 px-6 md:px-16 bg-white"
+      className="w-full py-24 px-6 md:px-16 bg-white dark:bg-slate-950 transition-colors duration-300"
     >
       <div className="max-w-7xl mx-auto">
 
@@ -42,13 +42,13 @@ const HowItWorks = () => {
             Simple Process
           </div> */}
 
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
+          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white leading-tight transition-colors duration-300">
             How
-            <span className="text-blue-900"> Rapid</span><span className="text-orange-600">Fix</span>
+            <span className="text-blue-900 dark:text-blue-400"> Rapid</span><span className="text-orange-600 dark:text-orange-555">Fix</span>
             works
           </h2>
 
-          <p className="text-lg text-gray-600 leading-relaxed">
+          <p className="text-lg text-gray-600 dark:text-gray-350 leading-relaxed transition-colors duration-300">
             Get repair assistance quickly through a streamlined
             3-step workflow designed for emergencies and daily fixes.
           </p>
@@ -60,34 +60,34 @@ const HowItWorks = () => {
           {STEPS.map((step, index) => (
             <div
               key={index}
-              className="relative bg-gray-50 border border-gray-100 rounded-3xl p-8 shadow-sm hover:shadow-xl transition-all duration-300 group"
+              className="relative bg-gray-50 dark:bg-slate-900/40 border border-gray-100 dark:border-slate-800/80 rounded-3xl p-8 shadow-sm hover:shadow-xl dark:hover:shadow-indigo-950/10 transition-all duration-300 group"
             >
 
               {/* STEP NUMBER */}
-              <div className="absolute top-6 right-6 text-5xl font-bold text-gray-200">
+              <div className="absolute top-6 right-6 text-5xl font-bold text-gray-200 dark:text-slate-800/60 transition-colors duration-300">
                 0{index + 1}
               </div>
 
               {/* ICON */}
-              <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-500 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-300">
+              <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-950/40 text-blue-500 dark:text-blue-400 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-300">
                 {step.icon}
               </div>
 
               {/* CONTENT */}
               <div className="space-y-4">
-                <h3 className="text-2xl font-bold text-gray-900">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white transition-colors duration-300">
                   {step.title}
                 </h3>
 
-                <p className="text-gray-600 leading-relaxed">
+                <p className="text-gray-600 dark:text-gray-350 leading-relaxed transition-colors duration-300">
                   {step.description}
                 </p>
               </div>
 
               {/* ARROW */}
               {index !== STEPS.length - 1 && (
-                <div className="hidden md:flex absolute -right-5 top-1/2 -translate-y-1/2 bg-white border border-gray-200 w-10 h-10 rounded-full items-center justify-center shadow-md">
-                  <ArrowRight size={18} className="text-blue-500" />
+                <div className="hidden md:flex absolute -right-5 top-1/2 -translate-y-1/2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 w-10 h-10 rounded-full items-center justify-center shadow-md">
+                  <ArrowRight size={18} className="text-blue-500 dark:text-blue-400" />
                 </div>
               )}
             </div>

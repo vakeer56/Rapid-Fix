@@ -6,7 +6,8 @@ const { worker } = require('cluster');
 exports.createProblem = async (req, res) => {
 
     try {
-        const {userId, name, description, address, urgency} = req.body;
+        const {name, description, address, urgency} = req.body;
+        const userId = req.user?.sub || req.body.userId;
 
         let pictureUrl = null;
         let videoUrl = null;
@@ -102,3 +103,13 @@ exports.resolveProblem = async (req, res) => {
         );
     }
 }
+
+exports.getUserProblems = async (req, res) => {
+    try {
+        const userId = req.user.sub;
+        const problems = await Problem.find({ userId }).populate('address').populate('assigned_worker');
+        return res.json({ success: true, problems });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};

@@ -1,13 +1,14 @@
 const jwt = require("jsonwebtoken");
 
-const generateAccessToken = (payload) => {
+const getJwtSecret = () => process.env.JWT_SECRET || "rapid_fix_default_secure_secret_123456";
 
+const generateAccessToken = (payload) => {
     return jwt.sign(
         {
             ...payload,
             tokenType:"access",
         },
-        process.env.JWT_SECRET,
+        getJwtSecret(),
         {
             expiresIn: process.env.JWT_EXPIRES_IN || "7d",
         }
@@ -19,7 +20,7 @@ const generateSetupToken = (payload) => {
         ...payload,
         tokenType:"setup",
     },
-    process.env.JWT_SECRET,
+    getJwtSecret(),
     {
         expiresIn: process.env.JWT_SETUP_EXPIRES_IN || "15m",
     }
@@ -27,7 +28,7 @@ const generateSetupToken = (payload) => {
 }
 
 const verifyToken = (token) => {
-    return jwt.verify(token, process.env.JWT_SECRET);
+    return jwt.verify(token, getJwtSecret());
 }
 
 module.exports = {

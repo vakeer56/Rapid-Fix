@@ -11,7 +11,7 @@ const requireSetupToken = (req, res, next) =>{
             });
         }
 
-        const [bearer, token] = authHeader.split("");
+        const [bearer, token] = authHeader.split(" ");
 
         if(bearer !== "Bearer" || !token){
             return res.status(401).json({
