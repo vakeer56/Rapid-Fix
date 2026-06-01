@@ -18,7 +18,8 @@ import {
   MapPin,
   Trash2,
   Plus,
-  Loader2
+  Loader2,
+  Briefcase
 } from "lucide-react";
 
 interface SavedAddress {
@@ -79,13 +80,41 @@ export default function Profile() {
     phone: appUser?.phone || "",
     age: appUser?.age ? String(appUser.age) : "",
     gender: appUser?.gender || "",
+    experience: appUser?.experience ? String(appUser.experience) : "",
+    located_address: appUser?.located_address || "",
+    preferred_areas: appUser?.preferred_areas?.join(", ") || "",
+    categories: appUser?.categories?.join(", ") || "",
   });
+
+  const [photo, setPhoto] = useState<string>("");
+  const [photoPreview, setPhotoPreview] = useState<string>(appUser?.photo || "");
 
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [resetSuccess, setResetSuccess] = useState(false);
+
+  const [preferredAreas, setPreferredAreas] = useState<string[]>([""]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  const addPreferredArea = () => {
+    setPreferredAreas(prev => [...prev, ""]);
+  };
+
+  const handlePreferredAreaChange = (index: number, value: string) => {
+    setPreferredAreas(prev => {
+      const updated = [...prev];
+      updated[index] = value;
+      return updated;
+    });
+  };
+
+  const removePreferredArea = (index: number) => {
+    if (preferredAreas.length > 1) {
+      setPreferredAreas(prev => prev.filter((_, i) => i !== index));
+    }
+  };
 
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
@@ -140,10 +169,52 @@ export default function Profile() {
   };
 
   useEffect(() => {
-    if (appUser?._id) {
+    if (appUser) {
+      setForm({
+        name: appUser.name || "",
+        email: appUser.email || "",
+        phone: appUser.phone || "",
+        age: appUser.age ? String(appUser.age) : "",
+        gender: appUser.gender || "",
+        experience: appUser.experience ? String(appUser.experience) : "",
+        located_address: appUser.located_address || "",
+        preferred_areas: appUser.preferred_areas?.join(", ") || "",
+        categories: appUser.categories?.join(", ") || "",
+      });
+      setPhotoPreview(appUser.photo || "");
+      if (appUser.preferred_areas && Array.isArray(appUser.preferred_areas) && appUser.preferred_areas.length > 0) {
+        setPreferredAreas(appUser.preferred_areas);
+      } else {
+        setPreferredAreas([""]);
+      }
+      setSelectedCategories(appUser.categories || []);
+    }
+  }, [appUser]);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError("");
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Profile photo must be less than 5MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setPhoto(base64String);
+        setPhotoPreview(base64String);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  useEffect(() => {
+    if (appUser?._id && appUser?.role !== "worker") {
       fetchAddresses();
     }
-  }, [appUser?._id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appUser?._id, appUser?.role]);
 
   const fetchAddresses = async () => {
     setAddressLoading(true);
@@ -232,10 +303,21 @@ export default function Profile() {
     setSuccess("");
     setLoading(true);
 
-    if (!form.name || !form.phone || !form.age || !form.gender || !form.email) {
-      setError("Please fill in all fields.");
-      setLoading(false);
-      return;
+    const isWorker = appUser?.role === "worker";
+
+    if (isWorker) {
+      const validPreferredAreas = preferredAreas.map(a => a.trim()).filter(Boolean);
+      if (!form.name || !form.phone || !form.age || !form.email || !form.experience || !form.located_address || validPreferredAreas.length === 0 || selectedCategories.length === 0) {
+        setError("Please fill in all compulsory fields, select at least one trade category, and provide at least one preferred location.");
+        setLoading(false);
+        return;
+      }
+    } else {
+      if (!form.name || !form.phone || !form.age || !form.gender || !form.email) {
+        setError("Please fill in all fields.");
+        setLoading(false);
+        return;
+      }
     }
 
     if (!/^\d{10}$/.test(form.phone)) {
@@ -245,17 +327,32 @@ export default function Profile() {
     }
 
     try {
-      const res = await api.put("/auth/profile", {
+      const payload: any = {
         name: form.name,
         email: form.email,
         phone: form.phone,
         age: Number(form.age),
-        gender: form.gender,
-      });
+      };
+
+      if (isWorker) {
+        payload.experience = Number(form.experience);
+        payload.located_address = form.located_address;
+        payload.preferred_areas = preferredAreas.map(a => a.trim()).filter(Boolean);
+        payload.categories = selectedCategories;
+      } else {
+        payload.gender = form.gender;
+      }
+
+      if (photo) {
+        payload.photo = photo;
+      }
+
+      const res = await api.put("/auth/profile", payload);
 
       const data = res.data;
       if (data.success && data.user) {
         setSuccess("Profile updated successfully!");
+        setPhoto("");
         if (appToken) {
           onAuthSuccess(appToken, data.user);
         }
@@ -329,8 +426,23 @@ export default function Profile() {
           {/* Left panel: Info summary */}
           <div className="md:col-span-1 space-y-6">
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 text-center shadow-sm">
-              <div className="relative w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-blue-500/25">
-                {form.name?.[0]?.toUpperCase() || "U"}
+              <div className="relative w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-blue-500/25 overflow-hidden shrink-0 group">
+                {photoPreview ? (
+                  <img src={photoPreview} alt={form.name} className="w-full h-full object-cover" />
+                ) : (
+                  form.name?.[0]?.toUpperCase() || "U"
+                )}
+                {/* Upload camera hover overlay */}
+                <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold cursor-pointer transition-all">
+                  <Plus size={16} className="mb-0.5" />
+                  Change
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoChange}
+                    className="hidden"
+                  />
+                </label>
               </div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">{form.name || "User"}</h2>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 truncate">{form.email}</p>
@@ -435,24 +547,147 @@ export default function Profile() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Gender</label>
-                    <div className="relative">
-                      <Users size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <select
-                        value={form.gender}
-                        onChange={setField("gender")}
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm appearance-none cursor-pointer"
-                        required
-                      >
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                        <option value="prefer_not">Prefer not</option>
-                      </select>
+                  {appUser?.role === "worker" ? (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Experience (Years)</label>
+                      <div className="relative">
+                        <Briefcase size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="number"
+                          value={form.experience}
+                          onChange={setField("experience")}
+                          min="0"
+                          max="80"
+                          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
+                          required
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Gender</label>
+                      <div className="relative">
+                        <Users size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <select
+                          value={form.gender}
+                          onChange={setField("gender")}
+                          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm appearance-none cursor-pointer"
+                          required
+                        >
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                          <option value="prefer_not">Prefer not</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {appUser?.role === "worker" && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Located Address</label>
+                      <div className="relative">
+                        <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          value={form.located_address}
+                          onChange={setField("located_address")}
+                          className="w-full pl-9 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
+                          placeholder="e.g. Dwarka, Tiruvannamalai, Tamil Nadu - 606603"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Preferred Locations */}
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 ml-0.5">
+                          Preferred Locations (At least one)
+                        </label>
+                        <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
+                          {preferredAreas.map((area, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                              <div className="relative flex-grow">
+                                <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                  type="text"
+                                  required={index === 0}
+                                  placeholder={index === 0 ? "e.g. City Name or District (Compulsory)" : "e.g. Popular Area Name (Optional)"}
+                                  value={area}
+                                  onChange={(e) => handlePreferredAreaChange(index, e.target.value)}
+                                  className="w-full pl-9 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium"
+                                />
+                              </div>
+                              {preferredAreas.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removePreferredArea(index)}
+                                  className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-red-500/10 hover:border-red-500/30 text-slate-400 hover:text-red-550 dark:hover:text-red-400 transition-all cursor-pointer active:scale-95 shrink-0"
+                                  title="Remove location"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={addPreferredArea}
+                          className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-orange-500 bg-slate-50 dark:bg-slate-900/20 hover:bg-slate-100 dark:hover:bg-slate-900/40 text-slate-550 dark:text-slate-400 hover:text-blue-600 dark:hover:text-orange-400 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer active:scale-[0.98]"
+                        >
+                          <Plus size={13} />
+                          Add Place
+                        </button>
+                      </div>
+
+                      {/* Trade Categories */}
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 ml-0.5">
+                          Trade Categories (Select all that apply)
+                        </label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {[
+                            { id: "Plumber", label: "Plumber 🪠" },
+                            { id: "Electrician", label: "Electrician ⚡" },
+                            { id: "Mechanic", label: "Mechanic ⚙️" },
+                            { id: "Technician", label: "Technician 🖥️" },
+                            { id: "Other", label: "Other 🛠️" },
+                          ].map((cat) => {
+                            const isSelected = selectedCategories.includes(cat.id);
+                            return (
+                              <button
+                                key={cat.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedCategories((prev) =>
+                                    prev.includes(cat.id)
+                                      ? prev.filter((c) => c !== cat.id)
+                                      : [...prev, cat.id]
+                                  );
+                                }}
+                                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-extrabold transition-all duration-200 active:scale-[0.97] cursor-pointer select-none ${
+                                  isSelected
+                                    ? cat.id === "Plumber" ? "bg-blue-500/20 border-blue-500 text-blue-600 dark:text-blue-400 shadow-md shadow-blue-500/10 animate-scale-up"
+                                      : cat.id === "Electrician" ? "bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400 shadow-md shadow-amber-500/10 animate-scale-up"
+                                      : cat.id === "Mechanic" ? "bg-purple-500/20 border-purple-500 text-purple-600 dark:text-purple-400 shadow-md shadow-purple-500/10 animate-scale-up"
+                                      : cat.id === "Technician" ? "bg-emerald-500/20 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-md shadow-emerald-500/10 animate-scale-up"
+                                      : "bg-orange-600/20 border-orange-500 text-orange-600 dark:text-orange-400 shadow-md shadow-orange-500/10 animate-scale-up"
+                                    : "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                                }`}
+                              >
+                                {cat.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="pt-2">
                   <button

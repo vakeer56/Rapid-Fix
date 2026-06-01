@@ -2,7 +2,6 @@ const workersSchema = require('../model/workers.model');
 const userSchema = require('../model/user.model');
 const reviewsSchema = require('../model/reviews.model');
 
-
 const addRating = async (workerId, value) => {
     try {
         await workersSchema.findByIdAndUpdate(workerId, {
@@ -19,14 +18,22 @@ const addRating = async (workerId, value) => {
 
 const addReview = async (req, res) => {
     try {
-        const {userId, workerId, review, rating} = req.body;
-        if(!userId || !workerId || !review || !rating){
+        const {userId, workerId, review, rating, description} = req.body;
+        const reviewText = review || description;
+        if(!userId || !workerId || !reviewText || !rating){
             return res.status(400).json({message: "All fields are required"});
         }
+
+        // Strict limit: check if user has already rated this worker once
+        const existingReview = await reviewsSchema.findOne({ user_id: userId, worker_id: workerId });
+        if (existingReview) {
+            return res.status(400).json({ message: "You have already rated this Service Partner." });
+        }
+
         const newReview = new reviewsSchema({
             user_id: userId,
             worker_id: workerId,
-            review: review,
+            discription: reviewText,
             rating: rating
         });
         await newReview.save();
@@ -68,4 +75,42 @@ const removeReview = async (req, res) => {
     }
 }
 
-module.exports = { addReview, removeReview };
+// Fetch complete rating & review history of a specific worker
+const getWorkerReviews = async (req, res) => {
+    try {
+        const { workerId } = req.params;
+        if (!workerId) {
+            return res.status(400).json({ message: "Please provide a worker id" });
+        }
+        const reviews = await reviewsSchema.find({ worker_id: workerId })
+            .populate("user_id", "name photo")
+            .sort({ createdAt: -1 });
+
+        const worker = await workersSchema.findById(workerId, "rating experience");
+
+        return res.json({
+            success: true,
+            reviews,
+            rating: worker?.rating || { totalSum: 0, totalCount: 0 },
+            experience: worker?.experience || 0
+        });
+    } catch (error) {
+        console.error("[getWorkerReviews]", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+// Fetch a list of worker IDs the logged-in customer has already reviewed
+const getRatedWorkers = async (req, res) => {
+    try {
+        const userId = req.user.sub;
+        const reviews = await reviewsSchema.find({ user_id: userId }, "worker_id");
+        const ratedWorkerIds = reviews.map(r => r.worker_id.toString());
+        return res.json({ success: true, ratedWorkerIds });
+    } catch (error) {
+        console.error("[getRatedWorkers]", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+module.exports = { addReview, removeReview, getWorkerReviews, getRatedWorkers };

@@ -40,6 +40,10 @@ const userSchema = new Schema({
         type: String,
         enum: ["firebase", "twilio"],
         default: "twilio",
+    },
+    photo: {
+        type: String,
+        default: ""
     }
 }, { timestamps: true })
 

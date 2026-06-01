@@ -60,6 +60,7 @@ test("createProblem saves a problem without uploads", async () => {
       description: "Kitchen sink leak",
       address: "507f191e810c19729de860ea",
       urgency: true,
+      category: "Plumber",
     },
   };
   const res = createRes();
@@ -70,8 +71,12 @@ test("createProblem saves a problem without uploads", async () => {
   assert.equal(res.body.name, "Broken tap");
   assert.equal(res.body.picture, null);
   assert.equal(res.body.video, null);
+  assert.deepEqual(res.body.pictures, []);
+  assert.deepEqual(res.body.videos, []);
+  assert.equal(res.body.category, "Plumber");
   assert.equal(savedProblem.name, "Broken tap");
   assert.equal(savedProblem.urgency, true);
+  assert.equal(savedProblem.category, "Plumber");
 });
 
 test("createProblem uploads picture and video, then deletes temp files", async () => {
@@ -98,9 +103,10 @@ test("createProblem uploads picture and video, then deletes temp files", async (
       description: "Bathroom drain clogged",
       address: "507f191e810c19729de860ea",
       urgency: false,
+      category: "Electrician",
     },
     files: {
-      picture: [{ path: "/tmp/picture.png" }],
+      picture: [{ path: "/tmp/picture.png" }, { path: "/tmp/picture2.png" }],
       video: [{ path: "/tmp/video.mp4" }],
     },
   };
@@ -111,9 +117,16 @@ test("createProblem uploads picture and video, then deletes temp files", async (
   assert.equal(res.statusCode, 201);
   assert.equal(res.body.picture, "https://cdn.example/picture.png");
   assert.equal(res.body.video, "https://cdn.example/video.mp4");
+  assert.deepEqual(res.body.pictures, ["https://cdn.example/picture.png", "https://cdn.example/picture.png"]);
+  assert.deepEqual(res.body.videos, ["https://cdn.example/video.mp4"]);
+  assert.equal(res.body.category, "Electrician");
   assert.deepEqual(uploadCalls, [
     {
       filePath: "/tmp/picture.png",
+      options: { folder: "rapidfix/images" },
+    },
+    {
+      filePath: "/tmp/picture2.png",
       options: { folder: "rapidfix/images" },
     },
     {
@@ -121,7 +134,7 @@ test("createProblem uploads picture and video, then deletes temp files", async (
       options: { resource_type: "video", folder: "rapidfix/videos" },
     },
   ]);
-  assert.deepEqual(deletedPaths, ["/tmp/picture.png", "/tmp/video.mp4"]);
+  assert.deepEqual(deletedPaths, ["/tmp/picture.png", "/tmp/picture2.png", "/tmp/video.mp4"]);
 });
 
 test("resolveProblem returns 404 when the problem does not exist", async () => {
@@ -179,7 +192,7 @@ test("resolveProblem removes the assignment from the worker and marks the proble
 
 test("workerAcceptProblem claims an available problem for a worker", async () => {
   let workerUpdateArgs = null;
-  const updatedProblem = { _id: "problem-1", status: "unresolved" };
+  const updatedProblem = { _id: "problem-1", status: "on the way" };
 
   Problem.findOneAndUpdate = async (query, update, options) => {
     assert.deepEqual(query, {
@@ -191,7 +204,7 @@ test("workerAcceptProblem claims an available problem for a worker", async () =>
     assert.deepEqual(update, {
       $set: {
         assigned_worker: "worker-1",
-        status: "unresolved",
+        status: "on the way",
       },
     });
     assert.deepEqual(options, { new: true });

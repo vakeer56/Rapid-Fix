@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   createUserWithEmailAndPassword,
@@ -33,7 +33,13 @@ const Shapes = () => (
 
 export default function Signup() {
   const navigate = useNavigate();
-  const { onAuthSuccess, onNeedsProfile, needsProfile, pendingFirebaseUser } = useAuth();
+  const { isAuthenticated, onAuthSuccess, onNeedsProfile, needsProfile, pendingFirebaseUser } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const [selectedRole, setSelectedRole] = useState<"user" | "worker">("user");
 
@@ -59,6 +65,7 @@ export default function Signup() {
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [photoPreview, setPhotoPreview] = useState("");
   const [error, setError] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const set = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
@@ -111,7 +118,7 @@ export default function Signup() {
 
   const handleBackendAuth = async (
     idToken: string,
-    extraFields?: { name: string; age: number; gender?: string; phone: string; email?: string; experience?: number; located_address?: string; preferred_areas?: string[]; photo?: string }
+    extraFields?: { name: string; age: number; gender?: string; phone: string; email?: string; experience?: number; located_address?: string; preferred_areas?: string[]; photo?: string; categories?: string[] }
   ) => {
     const res = await api.post("/auth/firebase", { idToken, role: selectedRole, ...extraFields });
     const data = res.data;
@@ -141,6 +148,10 @@ export default function Signup() {
         setError("For Service Partners, located address, experience, preferred locations, and a profile photo are compulsory.");
         return;
       }
+      if (selectedCategories.length === 0) {
+        setError("Please select at least one trade category.");
+        return;
+      }
     }
     if (password !== confirmPassword) { setError("Passwords do not match."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
@@ -162,6 +173,7 @@ export default function Signup() {
         photo,
         phone,
         email,
+        categories: selectedCategories,
       } : {
         name,
         age: Number(age),
@@ -490,6 +502,45 @@ export default function Signup() {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-300 mb-2 ml-0.5">Trade Categories (Select all that apply)</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {[
+                        { id: "Plumber", label: "Plumber 🪠" },
+                        { id: "Electrician", label: "Electrician ⚡" },
+                        { id: "Mechanic", label: "Mechanic ⚙️" },
+                        { id: "Technician", label: "Technician 🖥️" },
+                        { id: "Other", label: "Other 🛠️" },
+                      ].map((cat) => {
+                        const isSelected = selectedCategories.includes(cat.id);
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategories((prev) =>
+                                prev.includes(cat.id)
+                                  ? prev.filter((c) => c !== cat.id)
+                                  : [...prev, cat.id]
+                              );
+                            }}
+                            className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-bold transition-all duration-200 active:scale-[0.97] cursor-pointer select-none ${
+                              isSelected
+                                ? cat.id === "Plumber" ? "bg-blue-500/20 border-blue-500 text-blue-400 shadow-md shadow-blue-500/10"
+                                  : cat.id === "Electrician" ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-md shadow-amber-500/10"
+                                  : cat.id === "Mechanic" ? "bg-purple-500/20 border-purple-500 text-purple-400 shadow-md shadow-purple-500/10"
+                                  : cat.id === "Technician" ? "bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-md shadow-emerald-500/10"
+                                  : "bg-orange-600/20 border-orange-500 text-orange-400 shadow-md shadow-orange-500/10"
+                                : "bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="border border-dashed border-slate-800 rounded-2xl p-4 bg-slate-950/30 flex flex-col sm:flex-row items-center gap-4">
                     <div className="relative w-16 h-16 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0">
                       {photoPreview ? (
@@ -555,11 +606,6 @@ export default function Signup() {
                 </div>
               </div>
 
-              {error && (
-                <div className="flex items-center gap-2 text-red-500 text-xs bg-red-950/20 border border-red-900 rounded-xl px-4 py-3 animate-fade-in">
-                  ⚠ {error}
-                </div>
-              )}
 
               <button
                 type="submit"
@@ -592,6 +638,37 @@ export default function Signup() {
         prefillEmail={pendingFirebaseUser?.email}
         role={selectedRole}
       />
+      {error && (
+        <>
+          <style>{`
+            @keyframes slideIn {
+              from {
+                transform: translateX(120%);
+                opacity: 0;
+              }
+              to {
+                transform: translateX(0);
+                opacity: 1;
+              }
+            }
+            .animate-slide-in {
+              animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+          `}</style>
+          <div className="fixed top-6 right-6 z-[99999] max-w-sm w-[90%] sm:w-80 bg-slate-900/90 backdrop-blur-md border border-red-500/30 text-white rounded-2xl p-4 shadow-2xl shadow-red-950/20 animate-slide-in flex items-start gap-3">
+            <div className="mt-0.5 p-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 shrink-0">
+              <span>⚠️</span>
+            </div>
+            <div className="flex-grow">
+              <h4 className="text-[10px] font-black uppercase tracking-wider text-red-400">Authentication Error</h4>
+              <p className="text-xs text-slate-200 mt-1 font-semibold leading-relaxed">{error}</p>
+            </div>
+            <button type="button" onClick={() => setError("")} className="text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0">
+              ✕
+            </button>
+          </div>
+        </>
+      )}
     </>
   );
 }

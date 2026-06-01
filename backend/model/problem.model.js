@@ -10,8 +10,25 @@ const problemSchema = new mongoose.Schema(
       type: String, // URL
     },
 
+    pictures: {
+        type: [String],
+        default: []
+    },
+
     video: {
         type: String, // URL
+    },
+
+    videos: {
+        type: [String],
+        default: []
+    },
+
+    category: {
+        type: String,
+        required: true,
+        enum: ["Plumber", "Electrician", "Mechanic", "Technician", "Other"],
+        default: "Other"
     },
 
     name: {
@@ -33,7 +50,7 @@ const problemSchema = new mongoose.Schema(
 
     status: {
         type: String,
-        enum: ["unresolved", "pending", "resolved"],
+        enum: ["unresolved", "pending", "on the way", "in progress", "resolved"],
         default: "pending",
     },
 
@@ -41,6 +58,17 @@ const problemSchema = new mongoose.Schema(
         type: mongoose.Schema.Types.ObjectId,
         ref: "workers",
         default: null
+    },
+
+    resolved_worker: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "workers",
+        default: null
+    },
+
+    amountReceived: {
+        type: Number,
+        default: 0
     },
 
     rejected_workers: [

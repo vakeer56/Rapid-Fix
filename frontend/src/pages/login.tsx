@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   signInWithEmailAndPassword,
@@ -34,8 +34,14 @@ const Shapes = () => (
 export const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { onAuthSuccess, onNeedsProfile, needsProfile, pendingFirebaseUser } = useAuth();
+  const { isAuthenticated, onAuthSuccess, onNeedsProfile, needsProfile, pendingFirebaseUser } = useAuth();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/dashboard";
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -319,11 +325,6 @@ export const Login = () => {
                 </div>
               </div>
 
-              {error && (
-                <div className="flex items-center gap-2 text-red-400 text-xs bg-red-950/20 border border-red-900 rounded-xl px-4 py-3 animate-fade-in">
-                  ⚠ {error}
-                </div>
-              )}
 
               <button
                 type="submit"
@@ -421,6 +422,37 @@ export const Login = () => {
             </form>
           </div>
         </div>
+      )}
+      {error && (
+        <>
+          <style>{`
+            @keyframes slideIn {
+              from {
+                transform: translateX(120%);
+                opacity: 0;
+              }
+              to {
+                transform: translateX(0);
+                opacity: 1;
+              }
+            }
+            .animate-slide-in {
+              animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+          `}</style>
+          <div className="fixed top-6 right-6 z-[99999] max-w-sm w-[90%] sm:w-80 bg-slate-900/90 backdrop-blur-md border border-red-500/30 text-white rounded-2xl p-4 shadow-2xl shadow-red-950/20 animate-slide-in flex items-start gap-3">
+            <div className="mt-0.5 p-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 shrink-0">
+              <span>⚠️</span>
+            </div>
+            <div className="flex-grow">
+              <h4 className="text-[10px] font-black uppercase tracking-wider text-red-400">Authentication Error</h4>
+              <p className="text-xs text-slate-200 mt-1 font-semibold leading-relaxed">{error}</p>
+            </div>
+            <button type="button" onClick={() => setError("")} className="text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0">
+              ✕
+            </button>
+          </div>
+        </>
       )}
     </>
   );

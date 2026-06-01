@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { io } from "socket.io-client";
+import { Navigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Problem from "../components/Problem";
@@ -11,17 +13,17 @@ import {
   CheckCircle2, 
   Calendar, 
   MapPin, 
-  User, 
   Phone, 
   PlusCircle, 
   Video, 
-  Image as ImageIcon,
   Briefcase,
   ShieldCheck,
   Star,
   Zap,
   Check,
-  Loader2
+  Loader2,
+  Truck,
+  X
 } from "lucide-react";
 
 interface ProblemRequest {
@@ -29,10 +31,13 @@ interface ProblemRequest {
   name: string;
   description: string;
   urgency: boolean;
-  status: "unresolved" | "pending" | "resolved";
+  status: "unresolved" | "pending" | "on the way" | "in progress" | "resolved";
   createdAt: string;
   picture?: string;
+  pictures?: string[];
   video?: string;
+  videos?: string[];
+  category?: string;
   address?: {
     address: string;
     area: string;
@@ -42,10 +47,33 @@ interface ProblemRequest {
     pin_code: number;
   };
   assigned_worker?: {
+    _id: string;
     name: string;
     experience: number;
     phone: string;
+    photo?: string;
+    rating?: {
+      totalSum: number;
+      totalCount: number;
+    };
   };
+  resolved_worker?: {
+    _id: string;
+    name: string;
+    experience: number;
+    phone: string;
+    photo?: string;
+    rating?: {
+      totalSum: number;
+      totalCount: number;
+    };
+  };
+  userId?: {
+    _id: string;
+    name: string;
+    phone: string;
+  };
+  amountReceived?: number;
 }
 
 export default function Dashboard() {
@@ -64,7 +92,65 @@ export default function Dashboard() {
   const [availableLoading, setAvailableLoading] = useState(false);
   const [availableError, setAvailableError] = useState("");
   const [claimLoadingId, setClaimLoadingId] = useState<string | null>(null);
-  const [resolveLoadingId, setResolveLoadingId] = useState<string | null>(null);
+
+  // Worker Payout completion modal states
+  const [completingProblemId, setCompletingProblemId] = useState<string | null>(null);
+  const [payoutInputText, setPayoutInputText] = useState<string>("");
+  const [completingLoading, setCompletingLoading] = useState<boolean>(false);
+
+  // Progress loading state
+  const [progressLoadingId, setProgressLoadingId] = useState<string | null>(null);
+
+  // Review & Rating Modal states
+  const [reviewingProblem, setReviewingProblem] = useState<ProblemRequest | null>(null);
+  const [ratingValue, setRatingValue] = useState<number>(5);
+  const [reviewText, setReviewText] = useState<string>("");
+  const [reviewLoading, setReviewLoading] = useState<boolean>(false);
+  const [reviewSuccess, setReviewSuccess] = useState<boolean>(false);
+
+  // Worker Reviews History & Rated Workers states
+  const [ratedWorkers, setRatedWorkers] = useState<string[]>([]);
+  const [viewingWorkerReviews, setViewingWorkerReviews] = useState<any | null>(null);
+  const [workerReviewsList, setWorkerReviewsList] = useState<any[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+
+  const fetchRatedWorkers = async () => {
+    if (!appUser || appUser.role === "worker") return;
+    try {
+      const res = await api.get("/reviews/rated-workers");
+      if (res.data && res.data.success) {
+        setRatedWorkers(res.data.ratedWorkerIds);
+      }
+    } catch (err) {
+      console.warn("Rated workers fetch failed/skipped:", err);
+    }
+  };
+
+  const handleViewWorkerReviews = async (worker: any) => {
+    setViewingWorkerReviews(worker);
+    setReviewsLoading(true);
+    setWorkerReviewsList([]);
+    try {
+      const res = await api.get(`/reviews/worker/${worker._id}`);
+      if (res.data && res.data.success) {
+        setWorkerReviewsList(res.data.reviews);
+        if (res.data.rating) {
+          setViewingWorkerReviews((prev: any) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              rating: res.data.rating,
+              experience: res.data.experience ?? prev.experience
+            };
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("Worker reviews fetch failed:", err);
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (appUser) {
@@ -73,8 +159,46 @@ export default function Dashboard() {
         fetchActiveAssignments();
       } else {
         fetchRequests();
+        fetchRatedWorkers();
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appUser]);
+
+  // Real-time Event-Driven Synchronization via WebSockets (Socket.io)
+  useEffect(() => {
+    if (!appUser) return;
+
+    const socketUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+    const socket = io(socketUrl);
+
+    console.log(`[Socket] Connecting to server at ${socketUrl}...`);
+
+    socket.on("connect", () => {
+      console.log(`[Socket] Connected with ID: ${socket.id}`);
+    });
+
+    if (appUser.role === "worker") {
+      // Listen for newly created problems
+      socket.on("newProblem", (problem) => {
+        console.log("[Socket] Real-time Notification: New request raised!", problem);
+        fetchAvailableJobs();
+      });
+    } else {
+      // Listen for resolved problems
+      socket.on("problemResolved", (data) => {
+        console.log("[Socket] Real-time Notification: Request marked completed/resolved!", data);
+        fetchRequests();
+      });
+    }
+
+    socket.on("disconnect", () => {
+      console.log("[Socket] Disconnected from server.");
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appUser]);
 
@@ -145,7 +269,7 @@ export default function Dashboard() {
     if (!appUser?._id) return;
     setClaimLoadingId(problemId);
     try {
-      const res = await api.post("/worker/accept-problem", {
+      const res = await api.post("/workers/accept-problem", {
         workerId: appUser._id,
         problemId
       });
@@ -159,17 +283,76 @@ export default function Dashboard() {
     }
   };
 
-  const handleResolveJob = async (problemId: string) => {
-    setResolveLoadingId(problemId);
+  const handleStartProgress = async (problemId: string) => {
+    setProgressLoadingId(problemId);
     try {
-      const res = await api.patch(`/problem/ResolveProblem/${problemId}`);
+      const res = await api.patch(`/problem/start-progress/${problemId}`);
       if (res.status === 200) {
+        await Promise.all([fetchAvailableJobs(), fetchActiveAssignments()]);
+      }
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Failed to start progress.");
+    } finally {
+      setProgressLoadingId(null);
+    }
+  };
+
+  const triggerResolveModal = (problemId: string) => {
+    setCompletingProblemId(problemId);
+    setPayoutInputText("");
+  };
+
+  const handleResolveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!completingProblemId) return;
+    const amount = Number(payoutInputText) || 0;
+
+    setCompletingLoading(true);
+    try {
+      const res = await api.patch(`/problem/ResolveProblem/${completingProblemId}`, {
+        amountReceived: amount
+      });
+      if (res.status === 200) {
+        setCompletingProblemId(null);
+        setPayoutInputText("");
         await Promise.all([fetchAvailableJobs(), fetchActiveAssignments()]);
       }
     } catch (err: any) {
       alert("Failed to resolve job.");
     } finally {
-      setResolveLoadingId(null);
+      setCompletingLoading(false);
+    }
+  };
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appUser?._id || !reviewingProblem) return;
+    const activeWorker = reviewingProblem.assigned_worker || reviewingProblem.resolved_worker;
+    if (!activeWorker) return;
+    
+    setReviewLoading(true);
+    try {
+      const res = await api.post("/reviews/add", {
+        userId: appUser._id,
+        workerId: activeWorker._id,
+        rating: ratingValue,
+        review: reviewText
+      });
+      if (res.status === 201) {
+        setReviewSuccess(true);
+        setTimeout(() => {
+          setReviewingProblem(null);
+          setReviewText("");
+          setRatingValue(5);
+          setReviewSuccess(false);
+          fetchRequests(); // Refresh requests list
+          fetchRatedWorkers(); // Refresh rated workers
+        }, 1500);
+      }
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Failed to submit review.");
+    } finally {
+      setReviewLoading(false);
     }
   };
 
@@ -208,11 +391,50 @@ export default function Dashboard() {
     );
   };
 
+  const getCategoryBadge = (cat?: string) => {
+    if (!cat) return null;
+    let emoji = "🛠️";
+    let colorClass = "bg-slate-800 text-slate-350 border-slate-700/80";
+    if (cat === "Plumber") {
+      emoji = "🪠";
+      colorClass = "bg-blue-500/10 border-blue-500/30 text-blue-400";
+    } else if (cat === "Electrician") {
+      emoji = "⚡";
+      colorClass = "bg-amber-500/10 border-amber-500/30 text-amber-400";
+    } else if (cat === "Mechanic") {
+      emoji = "⚙️";
+      colorClass = "bg-purple-500/10 border-purple-500/30 text-purple-400";
+    } else if (cat === "Technician") {
+      emoji = "🖥️";
+      colorClass = "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
+    }
+    return (
+      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border flex items-center gap-1 shrink-0 ${colorClass}`}>
+        <span>{emoji}</span>
+        <span>{cat}</span>
+      </span>
+    );
+  };
+
   const getStatusBadge = (status: ProblemRequest["status"]) => {
     switch (status) {
+      case "on the way":
+        return (
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 border border-indigo-205 dark:border-indigo-900">
+            <Truck size={12} />
+            On the Way
+          </span>
+        );
+      case "in progress":
+        return (
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900 animate-pulse">
+            <Clock size={12} />
+            In Progress
+          </span>
+        );
       case "unresolved":
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900">
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900">
             <AlertCircle size={12} />
             Unresolved
           </span>
@@ -234,8 +456,19 @@ export default function Dashboard() {
     }
   };
 
+  if (!appUser) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 animate-pulse">
+          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-slate-400 text-sm font-medium tracking-wide">Syncing Session…</p>
+        </div>
+      </div>
+    );
+  }
+
   // ─── Service Partner Dashboard Panel ───
-  if (appUser?.role === "worker") {
+  if (appUser.role === "worker") {
     return (
       <div className="min-h-screen flex flex-col bg-slate-950 text-white font-sans transition-colors duration-300">
         <Navbar />
@@ -414,6 +647,7 @@ export default function Dashboard() {
                             <div className="space-y-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <h4 className="font-bold text-base text-white line-clamp-1">{job.name}</h4>
+                                {getCategoryBadge(job.category)}
                                 {job.urgency && (
                                   <span className="text-[9px] font-black uppercase tracking-wider bg-red-500/10 border border-red-500/30 text-red-400 px-2 py-0.5 rounded">
                                     Urgent
@@ -426,41 +660,71 @@ export default function Dashboard() {
                               </span>
                             </div>
                           </div>
+ 
+                           <p className="text-slate-400 text-xs leading-relaxed mb-4 line-clamp-3">{job.description}</p>
+ 
+                           {job.address && (
+                             <div className="flex items-start gap-2 text-[11px] text-slate-400 bg-slate-950/40 rounded-2xl p-3 border border-slate-850 mb-4">
+                               <MapPin size={12} className="text-orange-500 mt-0.5 shrink-0" />
+                               <span>{job.address.address}, {job.address.area}, {job.address.city}</span>
+                             </div>
+                           )}
+ 
+                           {/* Media Grid Carousel */}
+                           {((job.pictures && job.pictures.length > 0) || (job.videos && job.videos.length > 0) || job.picture || job.video) && (
+                             <div className="space-y-1.5 mb-4">
+                               <span className="text-[9px] uppercase font-bold text-slate-500">Diagnostics Attached</span>
+                               <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
+                                 {job.pictures && job.pictures.length > 0 ? (
+                                   job.pictures.map((picUrl, idx) => (
+                                     <a
+                                       key={`pic-${idx}`}
+                                       href={picUrl}
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-800 hover:border-orange-500/50 transition-all shadow-md group block"
+                                     >
+                                       <img src={picUrl} alt={`Diagnostic ${idx + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                     </a>
+                                   ))
+                                 ) : job.picture ? (
+                                   <a
+                                     href={job.picture}
+                                     target="_blank"
+                                     rel="noopener noreferrer"
+                                     className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-800 hover:border-orange-500/50 transition-all shadow-md group block"
+                                   >
+                                     <img src={job.picture} alt="Diagnostic Picture" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                   </a>
+                                 ) : null}
 
-                          <p className="text-slate-400 text-xs leading-relaxed mb-4 line-clamp-3">{job.description}</p>
-
-                          {job.address && (
-                            <div className="flex items-start gap-2 text-[11px] text-slate-400 bg-slate-950/40 rounded-2xl p-3 border border-slate-850 mb-4">
-                              <MapPin size={12} className="text-orange-500 mt-0.5 shrink-0" />
-                              <span>{job.address.address}, {job.address.area}, {job.address.city}</span>
-                            </div>
-                          )}
-
-                          {/* Media attachments */}
-                          {(job.picture || job.video) && (
-                            <div className="flex items-center gap-3 mb-4">
-                              {job.picture && (
-                                <a 
-                                  href={job.picture} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1 text-[10px] text-orange-400 hover:text-orange-300 transition-all hover:underline"
-                                >
-                                  <ImageIcon size={12} /> View Photo
-                                </a>
-                              )}
-                              {job.video && (
-                                <a 
-                                  href={job.video} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1 text-[10px] text-orange-400 hover:text-orange-300 transition-all hover:underline"
-                                >
-                                  <Video size={12} /> View Video
-                                </a>
-                              )}
-                            </div>
-                          )}
+                                 {job.videos && job.videos.length > 0 ? (
+                                   job.videos.map((vidUrl, idx) => (
+                                     <a
+                                       key={`vid-${idx}`}
+                                       href={vidUrl}
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       className="relative w-14 h-14 rounded-lg bg-indigo-950/40 border border-indigo-900 hover:border-orange-500/50 transition-all shadow-md flex flex-col items-center justify-center shrink-0 group text-center"
+                                     >
+                                       <Video size={14} className="text-indigo-400 group-hover:scale-105 transition-transform" />
+                                       <span className="text-[6px] text-slate-405 font-bold uppercase mt-0.5">Clip {idx + 1}</span>
+                                     </a>
+                                   ))
+                                 ) : job.video ? (
+                                   <a
+                                     href={job.video}
+                                     target="_blank"
+                                     rel="noopener noreferrer"
+                                     className="relative w-14 h-14 rounded-lg bg-indigo-950/40 border border-indigo-900 hover:border-orange-500/50 transition-all shadow-md flex flex-col items-center justify-center shrink-0 group text-center"
+                                   >
+                                     <Video size={14} className="text-indigo-400 group-hover:scale-105 transition-transform" />
+                                     <span className="text-[6px] text-slate-405 font-bold uppercase mt-0.5">Clip</span>
+                                   </a>
+                                 ) : null}
+                               </div>
+                             </div>
+                           )}
                         </div>
 
                         <button
@@ -540,6 +804,7 @@ export default function Dashboard() {
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <h4 className="font-bold text-lg text-white line-clamp-1">{assignment.name}</h4>
+                              {getCategoryBadge(assignment.category)}
                               {assignment.urgency && (
                                 <span className="text-[9px] font-black uppercase tracking-wider bg-red-500/10 border border-red-500/30 text-red-400 px-2 py-0.5 rounded">
                                   Urgent
@@ -553,69 +818,129 @@ export default function Dashboard() {
                             </span>
                           </div>
 
-                          <p className="text-slate-350 text-xs leading-relaxed max-w-xl">{assignment.description}</p>
+                          <p className="text-slate-355 text-xs leading-relaxed max-w-xl">{assignment.description}</p>
 
                           {assignment.address && (
-                            <div className="flex flex-col gap-2 text-xs text-slate-400 bg-slate-950/40 rounded-2xl p-4 border border-slate-850">
-                              <div className="flex items-start gap-2">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-slate-400 bg-slate-950/40 rounded-2xl p-4 border border-slate-850">
+                              <div className="flex items-start gap-2 max-w-xl">
                                 <MapPin size={13} className="text-orange-500 mt-0.5 shrink-0" />
                                 <span>
                                   <strong>Exact Address:</strong> {assignment.address.address}, {assignment.address.area}, {assignment.address.city}, {assignment.address.district}, {assignment.address.state} - {assignment.address.pin_code}
                                 </span>
                               </div>
+                              {assignment.status !== "resolved" && assignment.userId?.phone && (
+                                <a
+                                  href={`tel:${assignment.userId.phone}`}
+                                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-600/10 hover:bg-orange-600/20 text-orange-400 border border-orange-500/20 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 shrink-0 no-underline cursor-pointer"
+                                  title={`Call Customer: ${assignment.userId.name}`}
+                                >
+                                  <Phone size={13} className="animate-bounce" />
+                                  Call Customer
+                                </a>
+                              )}
                             </div>
                           )}
 
-                          {/* Media attachments */}
-                          {(assignment.picture || assignment.video) && (
-                            <div className="flex items-center gap-3">
-                              {assignment.picture && (
-                                <a 
-                                  href={assignment.picture} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1 text-[10px] text-orange-400 hover:text-orange-300 transition-all hover:underline"
-                                >
-                                  <ImageIcon size={12} /> View Photo
-                                </a>
-                              )}
-                              {assignment.video && (
-                                <a 
-                                  href={assignment.video} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1 text-[10px] text-orange-400 hover:text-orange-300 transition-all hover:underline"
-                                >
-                                  <Video size={12} /> View Video
-                                </a>
-                              )}
+                          {/* Media Grid Carousel */}
+                          {((assignment.pictures && assignment.pictures.length > 0) || (assignment.videos && assignment.videos.length > 0) || assignment.picture || assignment.video) && (
+                            <div className="space-y-1.5">
+                              <span className="text-[9px] uppercase font-bold text-slate-500">Diagnostics Attached</span>
+                              <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
+                                {assignment.pictures && assignment.pictures.length > 0 ? (
+                                  assignment.pictures.map((picUrl, idx) => (
+                                    <a
+                                      key={`pic-${idx}`}
+                                      href={picUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-800 hover:border-orange-500/50 transition-all shadow-md group block"
+                                    >
+                                      <img src={picUrl} alt={`Diagnostic ${idx + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                    </a>
+                                  ))
+                                ) : assignment.picture ? (
+                                  <a
+                                    href={assignment.picture}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-800 hover:border-orange-500/50 transition-all shadow-md group block"
+                                  >
+                                    <img src={assignment.picture} alt="Diagnostic Picture" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                  </a>
+                                ) : null}
+
+                                {assignment.videos && assignment.videos.length > 0 ? (
+                                  assignment.videos.map((vidUrl, idx) => (
+                                    <a
+                                      key={`vid-${idx}`}
+                                      href={vidUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="relative w-14 h-14 rounded-lg bg-indigo-950/40 border border-indigo-900 hover:border-orange-500/50 transition-all shadow-md flex flex-col items-center justify-center shrink-0 group text-center"
+                                    >
+                                      <Video size={14} className="text-indigo-400 group-hover:scale-105 transition-transform" />
+                                      <span className="text-[6px] text-slate-405 font-bold uppercase mt-0.5">Clip {idx + 1}</span>
+                                    </a>
+                                  ))
+                                ) : assignment.video ? (
+                                  <a
+                                    href={assignment.video}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="relative w-14 h-14 rounded-lg bg-indigo-950/40 border border-indigo-900 hover:border-orange-500/50 transition-all shadow-md flex flex-col items-center justify-center shrink-0 group text-center"
+                                  >
+                                    <Video size={14} className="text-indigo-400 group-hover:scale-105 transition-transform" />
+                                    <span className="text-[6px] text-slate-405 font-bold uppercase mt-0.5">Clip</span>
+                                  </a>
+                                ) : null}
+                              </div>
                             </div>
                           )}
                         </div>
 
                         {/* Control Actions Panel */}
                         <div className="shrink-0 flex flex-col gap-3 justify-center w-full sm:w-48">
-                          {assignment.status !== "resolved" ? (
-                            <>
-                              <button
-                                onClick={() => handleResolveJob(assignment._id)}
-                                disabled={resolveLoadingId === assignment._id}
-                                className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs transition-all active:scale-[0.98] shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer"
-                              >
-                                {resolveLoadingId === assignment._id ? (
-                                  <Loader2 size={14} className="animate-spin" />
-                                ) : (
-                                  <>
-                                    <Check size={14} />
-                                    Mark Resolved
-                                  </>
-                                )}
-                              </button>
-                            </>
+                          {assignment.status === "on the way" ? (
+                            <button
+                              onClick={() => handleStartProgress(assignment._id)}
+                              disabled={progressLoadingId === assignment._id}
+                              className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition-all active:scale-[0.98] shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer"
+                            >
+                              {progressLoadingId === assignment._id ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <>
+                                  <Truck size={14} />
+                                  Arrived & Start
+                                </>
+                              )}
+                            </button>
+                          ) : assignment.status === "in progress" ? (
+                            <button
+                              onClick={() => triggerResolveModal(assignment._id)}
+                              disabled={completingProblemId === assignment._id}
+                              className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs transition-all active:scale-[0.98] shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer"
+                            >
+                              {completingProblemId === assignment._id ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <>
+                                  <Check size={14} />
+                                  Mark Resolved
+                                </>
+                              )}
+                            </button>
                           ) : (
-                            <div className="flex items-center justify-center gap-1.5 py-2.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-xs">
-                              <CheckCircle2 size={14} />
-                              Completed
+                            <div className="flex flex-col gap-1 text-center py-2 px-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-xs">
+                              <div className="flex items-center justify-center gap-1">
+                                <CheckCircle2 size={14} />
+                                Completed
+                              </div>
+                              {assignment.amountReceived !== undefined && assignment.amountReceived > 0 && (
+                                <span className="text-[10px] text-slate-400 mt-0.5">
+                                  Earnings: ₹{assignment.amountReceived}
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -629,13 +954,83 @@ export default function Dashboard() {
         </main>
 
         <Footer />
+
+        {/* Worker Payout Modal */}
+        {completingProblemId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative overflow-hidden animate-scale-up">
+              {/* Glow decoration */}
+              <div className="absolute -right-16 -top-16 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+
+              <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                <CheckCircle2 className="text-emerald-500" size={22} />
+                Complete Repair Job
+              </h3>
+              <p className="text-xs text-slate-400 mb-6 font-medium leading-relaxed">
+                Please enter the final payment amount received directly from the customer. This establishes instant billing transparency.
+              </p>
+
+              <form onSubmit={handleResolveSubmit} className="space-y-6">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Amount Received (₹)</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400">₹</span>
+                    <input
+                      type="number"
+                      value={payoutInputText}
+                      onChange={(e) => setPayoutInputText(e.target.value)}
+                      placeholder="Enter amount (e.g. 500)"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-4 text-lg font-bold text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 placeholder-slate-700 transition-all"
+                      required
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                {/* Zero Platform Fee Tag */}
+                <div className="bg-emerald-950/20 border border-emerald-900/30 rounded-2xl p-4 text-xs leading-relaxed text-emerald-400 flex items-start gap-2.5">
+                  <ShieldCheck size={18} className="shrink-0" />
+                  <div>
+                    <strong className="block font-bold">100% Direct Payout</strong>
+                    Rapid-Fix charges ₹0 platform fees. The complete amount entered goes directly to you.
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompletingProblemId(null);
+                      setPayoutInputText("");
+                    }}
+                    className="w-1/2 py-3.5 rounded-2xl border border-slate-850 hover:bg-slate-800 text-slate-300 font-bold text-xs tracking-wide transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={completingLoading}
+                    className="w-1/2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-2xl text-xs tracking-wide transition-all active:scale-[0.98] shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer"
+                  >
+                    {completingLoading ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      "Submit & Close"
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   // ─── Customer Dashboard Panel ───
-  return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
+  if (appUser.role === "user" || appUser.role === "admin") {
+    return (
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
       <Navbar />
 
       <main className="flex-grow pt-28 pb-16 px-6 md:px-16 max-w-7xl mx-auto w-full">
@@ -720,6 +1115,7 @@ export default function Dashboard() {
                           <h3 className="font-bold text-lg text-slate-900 dark:text-white line-clamp-1">
                             {req.name}
                           </h3>
+                          {getCategoryBadge(req.category)}
                           {req.urgency && (
                             <span className="shrink-0 text-[10px] font-extrabold uppercase tracking-wide bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 px-2 py-0.5 rounded border border-red-200 dark:border-red-900">
                               Urgent
@@ -751,63 +1147,154 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    {/* Media Attachments */}
-                    {(req.picture || req.video) && (
-                      <div className="flex items-center gap-3 mb-4">
-                        {req.picture && (
-                          <a
-                            href={req.picture}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                          >
-                            <ImageIcon size={14} />
-                            View Photo
-                          </a>
-                        )}
-                        {req.video && (
-                          <a
-                            href={req.video}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                          >
-                            <Video size={14} />
-                            View Clip
-                          </a>
-                        )}
+                    {/* Media Grid Carousel */}
+                    {((req.pictures && req.pictures.length > 0) || (req.videos && req.videos.length > 0) || req.picture || req.video) && (
+                      <div className="space-y-1.5 mb-4">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500">Diagnostics Attached</span>
+                        <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
+                          {req.pictures && req.pictures.length > 0 ? (
+                            req.pictures.map((picUrl, idx) => (
+                              <a
+                                key={`pic-${idx}`}
+                                href={picUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 dark:hover:border-orange-500/50 transition-all shadow-md group block"
+                              >
+                                <img src={picUrl} alt={`Diagnostic ${idx + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                              </a>
+                            ))
+                          ) : req.picture ? (
+                            <a
+                              href={req.picture}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 dark:hover:border-orange-500/50 transition-all shadow-md group block"
+                            >
+                              <img src={req.picture} alt="Diagnostic Picture" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                            </a>
+                          ) : null}
+
+                          {req.videos && req.videos.length > 0 ? (
+                            req.videos.map((vidUrl, idx) => (
+                              <a
+                                key={`vid-${idx}`}
+                                href={vidUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="relative w-14 h-14 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-slate-200 dark:border-indigo-900 hover:border-blue-500/50 dark:hover:border-orange-500/50 transition-all shadow-md flex flex-col items-center justify-center shrink-0 group text-center"
+                              >
+                                <Video size={14} className="text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform" />
+                                <span className="text-[6px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-0.5">Clip {idx + 1}</span>
+                              </a>
+                            ))
+                          ) : req.video ? (
+                            <a
+                              href={req.video}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="relative w-14 h-14 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-slate-200 dark:border-indigo-900 hover:border-blue-500/50 dark:hover:border-orange-500/50 transition-all shadow-md flex flex-col items-center justify-center shrink-0 group text-center"
+                            >
+                              <Video size={14} className="text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform" />
+                              <span className="text-[6px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-0.5">Clip</span>
+                            </a>
+                          ) : null}
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Assigned worker footer info */}
+                  {/* Assigned/Resolved worker footer info */}
                   <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-2">
-                    {req.assigned_worker ? (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-indigo-400">
-                            <User size={18} />
+                    {req.assigned_worker || req.resolved_worker ? (
+                      (() => {
+                        const activeWorker = req.assigned_worker || req.resolved_worker;
+                        if (!activeWorker || typeof activeWorker !== "object" || !activeWorker.name) return null;
+                        return (
+                          <div className="flex flex-col gap-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start gap-3">
+                                <div className="relative w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 overflow-hidden shrink-0 mt-0.5">
+                                  {activeWorker.photo ? (
+                                    <img src={activeWorker.photo} alt={activeWorker.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-orange-500 font-bold bg-slate-950 text-sm">
+                                      {activeWorker.name[0].toUpperCase()}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-wide">
+                                    {req.status === "resolved" ? "Serviced by Expert" : "Technician Assigned"}
+                                  </p>
+                                  <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">{activeWorker.name}</p>
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">{activeWorker.experience || 0} Years In-field Experience</p>
+                                  <div className="flex flex-col gap-0.5 mt-1">
+                                    {renderStars(activeWorker.rating?.totalSum, activeWorker.rating?.totalCount)}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleViewWorkerReviews(activeWorker)}
+                                      className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600 dark:text-orange-400 dark:hover:text-orange-300 transition-colors mt-0.5 text-left border-none bg-transparent outline-none p-0 cursor-pointer hover:underline"
+                                    >
+                                      View Rating & Review History →
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                              {req.status !== "resolved" && (
+                                <a
+                                  href={`tel:${activeWorker.phone}`}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-blue-600 dark:text-orange-400 rounded-xl text-[10px] font-bold no-underline transition-colors shrink-0"
+                                >
+                                  <Phone size={11} />
+                                  Call Expert
+                                </a>
+                              )}
+                            </div>
+                            
+                            {req.status === "resolved" && (
+                              <div className="space-y-3">
+                                {/* Billing transparency */}
+                                <div className="bg-emerald-500/5 dark:bg-emerald-950/20 border border-emerald-500/10 dark:border-emerald-900/30 rounded-2xl p-4 text-[11px] space-y-2">
+                                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                                    <span className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[9px]">Total Amount Paid:</span>
+                                    <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">₹{req.amountReceived || 0}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-[10px] text-emerald-500 dark:text-emerald-400 border-t border-slate-200 dark:border-slate-800/80 pt-2 font-medium">
+                                    <span className="flex items-center gap-1">
+                                      <ShieldCheck size={12} />
+                                      Platform Fees: ₹0
+                                    </span>
+                                    <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">100% direct to specialist</span>
+                                  </div>
+                                </div>
+
+                                {ratedWorkers.includes(activeWorker._id) ? (
+                                  <div className="w-full py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-[10px] flex items-center justify-center gap-1.5 select-none uppercase tracking-wider">
+                                    <ShieldCheck size={12} />
+                                    ✓ Service Partner Rated & Reviewed
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setReviewingProblem(req)}
+                                    className="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-[10px] transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/10 cursor-pointer"
+                                  >
+                                    <Star size={11} className="fill-white" />
+                                    Rate & Review Expert
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <div>
-                            <p className="text-xs text-slate-400 dark:text-slate-500">Technician Assigned</p>
-                            <p className="text-sm font-bold text-slate-900 dark:text-white">{req.assigned_worker.name}</p>
-                          </div>
-                        </div>
-                        <a
-                          href={`tel:${req.assigned_worker.phone}`}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-blue-600 dark:text-orange-400 rounded-xl text-xs font-bold no-underline transition-colors"
-                        >
-                          <Phone size={12} />
-                          Call Expert
-                        </a>
-                      </div>
+                        );
+                      })()
                     ) : (
                       <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500">
                         <span className="relative flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                         </span>
-                        <span className="text-xs italic font-medium">Finding the perfect professional for your location…</span>
+                        <span className="text-[11px] italic font-medium">Finding the perfect professional for your location…</span>
                       </div>
                     )}
                   </div>
@@ -826,6 +1313,254 @@ export default function Dashboard() {
         setopen={setProblemOpen}
         onProblemCreated={fetchRequests}
       />
+
+      {/* Rate & Review Modal */}
+      {reviewingProblem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative animate-scale-up">
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setReviewingProblem(null);
+                setReviewText("");
+                setRatingValue(5);
+                setReviewSuccess(false);
+              }}
+              className="absolute right-4 top-4 text-slate-400 hover:text-white transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <h3 className="text-xl font-bold text-white mb-2">Rate & Review Expert</h3>
+            <p className="text-xs text-slate-400 mb-6 font-medium leading-relaxed">
+              Share your experience with <strong>{(reviewingProblem.assigned_worker || reviewingProblem.resolved_worker)?.name}</strong> for the job: "{reviewingProblem.name}"
+            </p>
+
+            {reviewSuccess ? (
+              <div className="text-center py-6">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4 text-emerald-400 animate-bounce">
+                  <CheckCircle2 size={32} />
+                </div>
+                <h4 className="text-lg font-bold text-white mb-1">Feedback Submitted!</h4>
+                <p className="text-xs text-slate-400">Thank you for rating our service partner.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleReviewSubmit} className="space-y-6">
+                {/* Star selector */}
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Rating</span>
+                  <div className="flex items-center gap-1.5">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setRatingValue(star)}
+                        className="p-1 hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                      >
+                        <Star
+                          size={32}
+                          className={
+                            star <= ratingValue
+                              ? "text-amber-400 fill-amber-400"
+                              : "text-slate-700 hover:text-amber-400/50"
+                          }
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-xs font-bold text-amber-400 mt-1">
+                    {ratingValue === 5 ? "Excellent 🌟" : ratingValue === 4 ? "Very Good 👍" : ratingValue === 3 ? "Good 👌" : ratingValue === 2 ? "Fair 😕" : "Poor 👎"}
+                  </span>
+                </div>
+
+                {/* Review text */}
+                <div className="space-y-1.5">
+                  <label htmlFor="reviewText" className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Write a Review</label>
+                  <textarea
+                    id="reviewText"
+                    rows={4}
+                    value={reviewText}
+                    onChange={(e) => setReviewText(e.target.value)}
+                    placeholder="Write a brief review about the expert's punctuality, work quality, and professionalism..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 placeholder-slate-600 resize-none transition-all"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={reviewLoading}
+                  className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold py-3.5 rounded-2xl text-xs sm:text-sm tracking-wide transition-all active:scale-[0.98] shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {reviewLoading ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    "Submit Feedback"
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Worker Payout Modal */}
+      {false && completingProblemId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative overflow-hidden animate-scale-up">
+            {/* Glow decoration */}
+            <div className="absolute -right-16 -top-16 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <CheckCircle2 className="text-emerald-500" size={22} />
+              Complete Repair Job
+            </h3>
+            <p className="text-xs text-slate-400 mb-6 font-medium leading-relaxed">
+              Please enter the final payment amount received directly from the customer. This establishes instant billing transparency.
+            </p>
+
+            <form onSubmit={handleResolveSubmit} className="space-y-6">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Amount Received (₹)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400">₹</span>
+                  <input
+                    type="number"
+                    value={payoutInputText}
+                    onChange={(e) => setPayoutInputText(e.target.value)}
+                    placeholder="Enter amount (e.g. 500)"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-4 text-lg font-bold text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 placeholder-slate-700 transition-all"
+                    required
+                    min="0"
+                  />
+                </div>
+              </div>
+
+              {/* Zero Platform Fee Tag */}
+              <div className="bg-emerald-950/20 border border-emerald-900/30 rounded-2xl p-4 text-xs leading-relaxed text-emerald-400 flex items-start gap-2.5">
+                <ShieldCheck size={18} className="shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block font-bold">100% Direct Payout</strong>
+                  Rapid-Fix charges ₹0 platform fees. The complete amount entered goes directly to you.
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCompletingProblemId(null);
+                    setPayoutInputText("");
+                  }}
+                  className="w-1/2 py-3.5 rounded-2xl border border-slate-850 hover:bg-slate-800 text-slate-300 font-bold text-xs tracking-wide transition-all active:scale-[0.98] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={completingLoading}
+                  className="w-1/2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-2xl text-xs tracking-wide transition-all active:scale-[0.98] shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer"
+                >
+                  {completingLoading ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    "Submit & Close"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Worker Reviews History Modal */}
+      {viewingWorkerReviews && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={() => setViewingWorkerReviews(null)} />
+          <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-800 flex justify-between items-center shrink-0">
+              <div>
+                <h3 className="text-base font-extrabold text-white">Rating & Review History</h3>
+                <p className="text-[11px] text-slate-400 mt-1">Specialist: <span className="text-orange-400 font-bold">{viewingWorkerReviews.name}</span></p>
+              </div>
+              <button
+                onClick={() => setViewingWorkerReviews(null)}
+                className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-800 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="p-5 overflow-y-auto custom-scrollbar flex-grow space-y-4">
+              <div className="flex items-center gap-4 bg-slate-950/30 p-3 rounded-2xl border border-slate-850 mb-2">
+                <div>
+                  <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500">Overall Rating</h4>
+                  <div className="mt-1.5">
+                    {renderStars(viewingWorkerReviews.rating?.totalSum, viewingWorkerReviews.rating?.totalCount)}
+                  </div>
+                </div>
+                <div className="border-l border-slate-800 pl-4 py-1">
+                  <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500">Experience</h4>
+                  <p className="text-xs font-bold text-white mt-1">{viewingWorkerReviews.experience || 0} Years In-field</p>
+                </div>
+              </div>
+
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-800/60 pb-1.5">Customer Reviews</h4>
+              
+              {reviewsLoading ? (
+                <div className="py-8 flex justify-center items-center">
+                  <Loader2 className="animate-spin text-orange-500" size={24} />
+                </div>
+              ) : workerReviewsList.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-xs text-slate-500 font-medium">No reviews written for this specialist yet.</p>
+                </div>
+              ) : (
+                workerReviewsList.map((rev) => (
+                  <div key={rev._id} className="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center text-[10px] font-bold text-white uppercase border border-slate-700">
+                          {rev.user_id?.photo ? (
+                            <img src={rev.user_id.photo} alt={rev.user_id.name} className="w-full h-full object-cover" />
+                          ) : (
+                            rev.user_id?.name?.[0]?.toUpperCase() || "C"
+                          )}
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-200">{rev.user_id?.name || "Customer"}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-550 font-semibold">
+                        {rev.createdAt ? new Date(rev.createdAt).toLocaleDateString() : "Just now"}
+                      </span>
+                    </div>
+                    
+                    {/* Stars */}
+                    <div className="flex gap-0.5">
+                      {[...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          size={11}
+                          className={i < rev.rating ? "text-amber-400 fill-amber-400" : "text-slate-700"}
+                        />
+                      ))}
+                    </div>
+
+                    <p className="text-xs text-slate-300 leading-relaxed font-medium italic">
+                      "{rev.discription}"
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+// Fallback redirect screen
+return <Navigate to="/login" replace />;
 }

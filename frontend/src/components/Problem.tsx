@@ -10,7 +10,6 @@ import {
   Sparkles, 
   ShieldCheck, 
   Zap, 
-  Image as ImageIcon,
   Video as VideoIcon,
   Loader2
 } from "lucide-react";
@@ -19,6 +18,9 @@ type ProblemProps = {
   open: boolean;
   setopen: React.Dispatch<React.SetStateAction<boolean>>;
   onProblemCreated?: () => void;
+  prefillName?: string;
+  prefillDescription?: string;
+  prefillCategory?: string;
 };
 
 interface SavedAddress {
@@ -67,7 +69,14 @@ const INDIAN_STATES = [
   "Puducherry"
 ];
 
-export default function Problem({ open, setopen, onProblemCreated }: ProblemProps) {
+export default function Problem({ 
+  open, 
+  setopen, 
+  onProblemCreated,
+  prefillName,
+  prefillDescription,
+  prefillCategory
+}: ProblemProps) {
   const { appUser } = useAuth();
   
   // Basic problem fields
@@ -78,10 +87,22 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
   });
 
   // Files & Previews
-  const [picture, setPicture] = useState<File | null>(null);
-  const [picturePreview, setPicturePreview] = useState<string>("");
-  const [video, setVideo] = useState<File | null>(null);
-  const [videoPreview, setVideoPreview] = useState<string>("");
+  const [pictures, setPictures] = useState<File[]>([]);
+  const [picturePreviews, setPicturePreviews] = useState<string[]>([]);
+  const [videos, setVideos] = useState<File[]>([]);
+  const [videoPreviews, setVideoPreviews] = useState<{ name: string; size: string }[]>([]);
+  const [category, setCategory] = useState<string>("");
+
+  useEffect(() => {
+    if (open) {
+      setformdata({
+        problemname: prefillName || "",
+        description: prefillDescription || "",
+        urgency: false,
+      });
+      setCategory(prefillCategory || "");
+    }
+  }, [open, prefillName, prefillDescription, prefillCategory]);
 
   // Address logic
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
@@ -183,16 +204,46 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, files } = e.target;
-    if (files && files[0]) {
-      const file = files[0];
+    if (files) {
+      const filesArray = Array.from(files);
       if (name === "picture") {
-        setPicture(file);
-        setPicturePreview(URL.createObjectURL(file));
+        if (pictures.length + filesArray.length > 10) {
+          setError("You can upload a maximum of 10 pictures.");
+          return;
+        }
+        setPictures(prev => [...prev, ...filesArray]);
+        setPicturePreviews(prev => [
+          ...prev,
+          ...filesArray.map(file => URL.createObjectURL(file))
+        ]);
       } else if (name === "video") {
-        setVideo(file);
-        setVideoPreview(file.name);
+        if (videos.length + filesArray.length > 5) {
+          setError("You can upload a maximum of 5 videos.");
+          return;
+        }
+        setVideos(prev => [...prev, ...filesArray]);
+        setVideoPreviews(prev => [
+          ...prev,
+          ...filesArray.map(file => ({
+            name: file.name,
+            size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+          }))
+        ]);
       }
     }
+  };
+
+  const removePicture = (index: number) => {
+    setPictures(prev => prev.filter((_, i) => i !== index));
+    setPicturePreviews(prev => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const removeVideo = (index: number) => {
+    setVideos(prev => prev.filter((_, i) => i !== index));
+    setVideoPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -208,6 +259,12 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
 
     if (!formdata.problemname || !formdata.description) {
       setError("Problem name and description are required.");
+      setLoading(false);
+      return;
+    }
+
+    if (!category) {
+      setError("Please select a problem category.");
       setLoading(false);
       return;
     }
@@ -253,13 +310,14 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
       data.append("description", formdata.description);
       data.append("urgency", String(formdata.urgency));
       data.append("address", finalAddressId);
+      data.append("category", category);
       
-      if (picture) {
-        data.append("picture", picture);
-      }
-      if (video) {
-        data.append("video", video);
-      }
+      pictures.forEach((pic) => {
+        data.append("picture", pic);
+      });
+      videos.forEach((vid) => {
+        data.append("video", vid);
+      });
 
       await api.post("/problem/createProblem", data, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -270,10 +328,11 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
         setopen(false);
         setSuccess(false);
         setformdata({ problemname: "", description: "", urgency: false });
-        setPicture(null);
-        setPicturePreview("");
-        setVideo(null);
-        setVideoPreview("");
+        setPictures([]);
+        setPicturePreviews([]);
+        setVideos([]);
+        setVideoPreviews([]);
+        setCategory("");
         if (onProblemCreated) onProblemCreated();
       }, 1800);
 
@@ -412,6 +471,26 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
                 {/* Column 1: Details */}
                 <div className="space-y-5">
                   <div className="space-y-1.5">
+                    <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 ml-0.5">Problem Category</label>
+                    <div className="relative">
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="w-full border border-slate-800 bg-slate-900/40 text-white rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent transition-all text-sm cursor-pointer appearance-none"
+                        required
+                      >
+                        <option value="" disabled className="bg-slate-950 text-slate-500">Select Category</option>
+                        <option value="Plumber" className="bg-slate-950 text-white">Plumber 🪠</option>
+                        <option value="Electrician" className="bg-slate-950 text-white">Electrician ⚡</option>
+                        <option value="Mechanic" className="bg-slate-950 text-white">Mechanic ⚙️</option>
+                        <option value="Technician" className="bg-slate-950 text-white">Technician 🖥️</option>
+                        <option value="Other" className="bg-slate-950 text-white">Other 🛠️</option>
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 text-xs">▼</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
                     <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 ml-0.5">Problem Name</label>
                     <input
                       type="text"
@@ -471,55 +550,61 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
                   {/* Uploads row */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Diagnostic Photo</label>
-                      <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-3 cursor-pointer text-center h-28 relative overflow-hidden transition-all duration-300 ${
-                        picturePreview 
-                          ? "border-emerald-500/30 bg-emerald-950/10 hover:bg-emerald-950/20" 
-                          : "border-slate-800 bg-slate-900/40 hover:bg-slate-900/60"
-                      }`}>
-                        {picturePreview ? (
-                          <>
-                            <img src={picturePreview} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-60" />
-                            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center p-2">
-                              <ImageIcon size={18} className="text-emerald-400 mb-1" />
-                              <span className="text-[8px] font-bold text-white truncate max-w-full">{picture?.name}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <Upload size={18} className="text-slate-500 mb-1.5" />
-                            <span className="text-[10px] font-bold text-slate-300">Upload Image</span>
-                            <span className="text-[8px] text-slate-500 mt-0.5">JPG, PNG up to 5MB</span>
-                          </>
-                        )}
-                        <input type="file" name="picture" accept="image/*" onChange={handleFileChange} className="hidden" />
+                      <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Diagnostic Photos</label>
+                      <label className="flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-3 cursor-pointer text-center h-28 border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 transition-all duration-300">
+                        <Upload size={18} className="text-slate-500 mb-1.5" />
+                        <span className="text-[10px] font-bold text-slate-300">Upload Images</span>
+                        <span className="text-[8px] text-slate-500 mt-0.5">Select up to 10 JPG, PNG</span>
+                        <input type="file" name="picture" accept="image/*" multiple onChange={handleFileChange} className="hidden" />
                       </label>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Diagnostic Video</label>
-                      <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-3 cursor-pointer text-center h-28 relative overflow-hidden transition-all duration-300 ${
-                        videoPreview 
-                          ? "border-emerald-500/30 bg-emerald-950/10 hover:bg-emerald-950/20" 
-                          : "border-slate-800 bg-slate-900/40 hover:bg-slate-900/60"
-                      }`}>
-                        {videoPreview ? (
-                          <div className="absolute inset-0 bg-emerald-950/20 flex flex-col items-center justify-center p-2">
-                            <VideoIcon size={18} className="text-emerald-400 mb-1 animate-pulse" />
-                            <span className="text-[8px] font-bold text-emerald-300 truncate max-w-full">{videoPreview}</span>
-                            <span className="text-[7px] text-slate-400 mt-0.5 font-semibold uppercase">Video Attached</span>
-                          </div>
-                        ) : (
-                          <>
-                            <Upload size={18} className="text-slate-500 mb-1.5" />
-                            <span className="text-[10px] font-bold text-slate-300">Upload Clip</span>
-                            <span className="text-[8px] text-slate-500 mt-0.5">MP4, MOV up to 15MB</span>
-                          </>
-                        )}
-                        <input type="file" name="video" accept="video/*" onChange={handleFileChange} className="hidden" />
+                      <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Diagnostic Videos</label>
+                      <label className="flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-3 cursor-pointer text-center h-28 border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 transition-all duration-300">
+                        <Upload size={18} className="text-slate-500 mb-1.5" />
+                        <span className="text-[10px] font-bold text-slate-300">Upload Clips</span>
+                        <span className="text-[8px] text-slate-500 mt-0.5">Select up to 5 MP4, MOV</span>
+                        <input type="file" name="video" accept="video/*" multiple onChange={handleFileChange} className="hidden" />
                       </label>
                     </div>
                   </div>
+
+                  {/* Media Preview Strip */}
+                  {(picturePreviews.length > 0 || videoPreviews.length > 0) && (
+                    <div className="border border-slate-800 bg-slate-900/20 rounded-2xl p-4 space-y-3">
+                      <h4 className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Attached Diagnostics</h4>
+                      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+                        {picturePreviews.map((src, index) => (
+                          <div key={`pic-${index}`} className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 border border-slate-800 group shadow-md">
+                            <img src={src} alt="Attached Preview" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => removePicture(index)}
+                              className="absolute top-0.5 right-0.5 bg-black/75 hover:bg-red-650 text-white rounded-full w-4 flex items-center justify-center h-4 text-[9px] font-bold transition-all border border-white/10 cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+
+                        {videoPreviews.map((vid, index) => (
+                          <div key={`vid-${index}`} className="relative w-20 h-16 rounded-lg bg-indigo-950/40 border border-indigo-900 flex flex-col items-center justify-center p-1.5 shrink-0 group text-center shadow-md">
+                            <VideoIcon size={14} className="text-indigo-400 mb-1 animate-pulse" />
+                            <span className="text-[7px] font-bold text-slate-300 truncate max-w-full leading-tight">{vid.name}</span>
+                            <span className="text-[6px] text-indigo-400 font-bold uppercase">{vid.size}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeVideo(index)}
+                              className="absolute top-0.5 right-0.5 bg-black/75 hover:bg-red-650 text-white rounded-full w-4 flex items-center justify-center h-4 text-[9px] font-bold transition-all border border-white/10 cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Service Address Module */}
                   <div className="border border-slate-800 rounded-2xl p-4 bg-slate-900/30">

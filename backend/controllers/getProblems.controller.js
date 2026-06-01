@@ -45,7 +45,7 @@ const getAllProblems = async (req, res) => {
         
         const areaRegexes = preferred_areas.map(area => {
             const escapedArea = escapeRegExp(area.trim());
-            return new RegExp(`^${escapedArea}$`, 'i');
+            return new RegExp(escapedArea, 'i');
         });
 
         // Convert the string ID to a MongoDB ObjectId so the aggregate query matches properly
@@ -56,7 +56,8 @@ const getAllProblems = async (req, res) => {
             $match: {
             status: "pending",
             assigned_worker: null,
-            rejected_workers: { $nin: [workerObjectId] }
+            rejected_workers: { $nin: [workerObjectId] },
+            category: { $in: worker.categories || [] }
             }
         },
         {
@@ -72,10 +73,13 @@ const getAllProblems = async (req, res) => {
             $match: {
             $or: [
                 { "address.area": { $in: areaRegexes } },
-                { "address.city": { $in: areaRegexes } }
-            ],
-            "address.district": districtRegex
+                { "address.city": { $in: areaRegexes } },
+                { "address.district": { $in: areaRegexes } }
+            ]
             }
+        },
+        {
+            $sort: { createdAt: -1 }
         }
         ]);
 

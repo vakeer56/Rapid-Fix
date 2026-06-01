@@ -67,6 +67,11 @@ const workersSchema = new mongoose.Schema(
             enum: ["firebase", "twilio"],
             default: "twilio",
         },
+        categories: {
+            type: [String],
+            default: [],
+            required: true
+        }
 });      
 
 const workersModel = mongoose.model("workers", workersSchema);

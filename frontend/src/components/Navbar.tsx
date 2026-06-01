@@ -34,41 +34,63 @@ export default function Navbar() {
             </Link>
 
             {/* NAV-BARS */}
-            <ul className="hidden md:flex gap-8 lg:gap-12 list-none m-0 p-0">
-                {NAV_LINKS.map((link: NavLinkItem) => (
-                    <li key={link.label}>
-                        {link.href.startsWith("#") ? (
-                            isLanding ? (
-                                <a
-                                    href={link.href}
-                                    className="text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 font-medium text-sm no-underline transition-colors duration-200"
-                                >
-                                    {link.label}
-                                </a>
+            <ul className="hidden md:flex gap-4 lg:gap-6 list-none m-0 p-0 items-center">
+                {NAV_LINKS.map((link: NavLinkItem) => {
+                    const isActive = link.href === "/"
+                        ? location.pathname === "/" && !location.hash
+                        : location.pathname === link.href || (location.pathname === "/" && location.hash === link.href);
+
+                    return (
+                        <li key={link.label}>
+                            {link.href.startsWith("#") ? (
+                                isLanding ? (
+                                    <a
+                                        href={link.href}
+                                        className={`px-4 py-2 rounded-full font-semibold text-sm no-underline transition-all duration-300 ${
+                                            isActive
+                                                ? "text-blue-900 dark:text-orange-500 bg-white/45 dark:bg-slate-900/45 backdrop-blur-[6px] border border-white/55 dark:border-slate-800/55 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.7),inset_0_-1px_1px_rgba(0,0,0,0.08),0_8px_16px_-4px_rgba(59,130,246,0.18)] dark:shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.18),0_8px_16px_-4px_rgba(249,115,22,0.18)]"
+                                                : "text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
+                                        }`}
+                                    >
+                                        {link.label}
+                                    </a>
+                                ) : (
+                                    <Link
+                                        to={`/${link.href}`}
+                                        className={`px-4 py-2 rounded-full font-semibold text-sm no-underline transition-all duration-300 ${
+                                            isActive
+                                                ? "text-blue-900 dark:text-orange-500 bg-white/45 dark:bg-slate-900/45 backdrop-blur-[6px] border border-white/55 dark:border-slate-800/55 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.7),inset_0_-1px_1px_rgba(0,0,0,0.08),0_8px_16px_-4px_rgba(59,130,246,0.18)] dark:shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.18),0_8px_16px_-4px_rgba(249,115,22,0.18)]"
+                                                : "text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
+                                        }`}
+                                    >
+                                        {link.label}
+                                    </Link>
+                                )
                             ) : (
                                 <Link
-                                    to={`/${link.href}`}
-                                    className="text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 font-medium text-sm no-underline transition-colors duration-200"
+                                    to={link.href}
+                                    className={`px-4 py-2 rounded-full font-semibold text-sm no-underline transition-all duration-300 ${
+                                        isActive
+                                            ? "text-blue-900 dark:text-orange-500 bg-white/45 dark:bg-slate-900/45 backdrop-blur-[6px] border border-white/55 dark:border-slate-800/55 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.7),inset_0_-1px_1px_rgba(0,0,0,0.08),0_8px_16px_-4px_rgba(59,130,246,0.18)] dark:shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.18),0_8px_16px_-4px_rgba(249,115,22,0.18)]"
+                                            : "text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
+                                    }`}
                                 >
                                     {link.label}
                                 </Link>
-                            )
-                        ) : (
-                            <Link
-                                to={link.href}
-                                className="text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 font-medium text-sm no-underline transition-colors duration-200"
-                            >
-                                {link.label}
-                            </Link>
-                        )}
-                    </li>
-                ))}
+                            )}
+                        </li>
+                    );
+                })}
                 
                 {isAuthenticated && (
                     <li>
                         <Link
                             to="/dashboard"
-                            className="text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 font-medium text-sm no-underline transition-colors duration-200 flex items-center gap-1.5"
+                            className={`px-4 py-2 rounded-full font-semibold text-sm no-underline transition-all duration-300 flex items-center gap-1.5 ${
+                                location.pathname === "/dashboard"
+                                    ? "text-blue-900 dark:text-orange-500 bg-white/45 dark:bg-slate-900/45 backdrop-blur-[6px] border border-white/55 dark:border-slate-800/55 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.7),inset_0_-1px_1px_rgba(0,0,0,0.08),0_8px_16px_-4px_rgba(59,130,246,0.18)] dark:shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.18),0_8px_16px_-4px_rgba(249,115,22,0.18)]"
+                                    : "text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
+                            }`}
                         >
                             <LayoutDashboard size={15} />
                             Dashboard
@@ -99,8 +121,12 @@ export default function Navbar() {
                             to="/profile" 
                             className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 transition-all text-slate-800 dark:text-slate-200 no-underline shadow-sm animate-fade-in"
                         >
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-md shadow-blue-500/20">
-                                {getInitials(appUser?.name || "")}
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-md shadow-blue-500/20 overflow-hidden shrink-0">
+                                {appUser?.photo ? (
+                                    <img src={appUser.photo} alt={appUser.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    getInitials(appUser?.name || "")
+                                )}
                             </div>
                             <span className="hidden sm:inline text-xs font-semibold max-w-[100px] truncate">{appUser?.name}</span>
                         </Link>

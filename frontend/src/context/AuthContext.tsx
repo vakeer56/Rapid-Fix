@@ -29,6 +29,7 @@ export interface AppUser {
   photo?: string;
   verificationStatus?: boolean;
   firebaseUid: string;
+  categories?: string[];
 }
 
 export interface AuthContextType {
@@ -68,7 +69,17 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [appUser, setAppUser] = useState<AppUser | null>(null);
+  const [appUser, setAppUser] = useState<AppUser | null>(() => {
+    const stored = localStorage.getItem("rf_app_user");
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
   const [appToken, setAppToken] = useState<string | null>(
     localStorage.getItem("rf_app_token")
   );
@@ -77,12 +88,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [pendingFirebaseUser, setPendingFirebaseUser] = useState<AuthContextType["pendingFirebaseUser"]>(null);
   const [setupToken, setSetupToken] = useState<string | null>(null);
 
-  // Restore persisted app user from localStorage on mount
+  // Synchronize persisted profile with the server on mount
   useEffect(() => {
-    const stored = localStorage.getItem("rf_app_user");
-    if (stored) {
-      try { setAppUser(JSON.parse(stored)); } catch { /* ignore */ }
-    }
+    const syncProfile = async () => {
+      const token = localStorage.getItem("rf_app_token");
+      if (!token) return;
+      try {
+        const res = await api.get("/auth/me");
+        if (res.data && res.data.success && res.data.account) {
+          const userWithRole = {
+            ...res.data.account,
+            role: res.data.role
+          };
+          setAppUser(userWithRole);
+          localStorage.setItem("rf_app_user", JSON.stringify(userWithRole));
+        }
+      } catch (err) {
+        console.warn("[Auth] Profile sync with server failed or offline:", err);
+      }
+    };
+    syncProfile();
   }, []);
 
   // Dynamically sync and fetch Firebase credentials from the backend on mount

@@ -15,7 +15,7 @@ const workerAcceptProblem = async (req, res) => {
             {
                 $set: {
                     assigned_worker: workerId,
-                    status: "unresolved"
+                    status: "on the way"
                 }
             },
             { new: true }

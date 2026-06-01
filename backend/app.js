@@ -34,6 +34,25 @@ app.use("/workers", workerRoutes);
 app.use('/problem', problemRoutes);
 app.use("/auth", authRoutes);
 
-app.listen(PORT, ()=> {
+const http = require('http');
+const { Server } = require('socket.io');
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST", "PATCH", "PUT", "DELETE"]
+    }
+});
+
+io.on('connection', (socket) => {
+    console.log(`[Socket] New client connected: ${socket.id}`);
+    socket.on('disconnect', () => {
+        console.log(`[Socket] Client disconnected: ${socket.id}`);
+    });
+});
+
+app.set('socketio', io);
+
+server.listen(PORT, ()=> {
     console.log(`server running on port ${PORT}`)
-})
+});

@@ -45,6 +45,24 @@ const sendOtpController = async (req, res) => {
             });
         }
 
+        if (role === "users") {
+            const oppositeWorker = await Worker.findOne({ phone });
+            if (oppositeWorker) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This phone number is registered as a Service Partner. Please sign in as a Service Partner."
+                });
+            }
+        } else if (role === "worker") {
+            const oppositeUser = await User.findOne({ phone });
+            if (oppositeUser) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This phone number is registered as a Customer. Please sign in as a Customer."
+                });
+            }
+        }
+
         const result = await sendOtp(phone);
 
         if(!result.success){
@@ -87,6 +105,24 @@ const verifyOtpController = async (req, res) => {
                 success: "false",
                 message: "Invalid OTP",
             });
+        }
+
+        if (role === "user") {
+            const oppositeWorker = await Worker.findOne({ phone });
+            if (oppositeWorker) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This phone number is registered as a Service Partner. Please sign in as a Service Partner."
+                });
+            }
+        } else if (role === "worker") {
+            const oppositeUser = await User.findOne({ phone });
+            if (oppositeUser) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This phone number is registered as a Customer. Please sign in as a Customer."
+                });
+            }
         }
 
         let account = null;
@@ -144,6 +180,18 @@ const completeProfileController = async(req, res) => {
 
         let account = null;
 
+        if (role === 'user') {
+            const oppositeWorker = await Worker.findOne({ phone });
+            if (oppositeWorker) {
+                return res.status(400).json({ success: false, message: "This phone number is registered as a Service Partner." });
+            }
+        } else if (role === 'worker') {
+            const oppositeUser = await User.findOne({ phone });
+            if (oppositeUser) {
+                return res.status(400).json({ success: false, message: "This phone number is registered as a Customer." });
+            }
+        }
+
         if(role==='user'){
             const {name, age, gender, email,} = req.body;
 
@@ -171,18 +219,32 @@ const completeProfileController = async(req, res) => {
                 preferred_areas,
                 located_address,
                 photo,
+                categories,
             } = req.body;
 
-            if (!name || !age || experience === undefined || !located_address || !photo || !preferred_areas) {
+            if (!name || !age || experience === undefined || !located_address || !photo || !preferred_areas || !categories) {
                 return res.status(400).json({
                     success: false,
-                    message: "Missing required worker fields: name, age, experience, located_address, preferred_areas, and photo are compulsory.",
+                    message: "Missing required worker fields: name, age, experience, located_address, preferred_areas, photo, and categories are compulsory.",
                 });
             }
 
             const parsedAreas = Array.isArray(preferred_areas)
                 ? preferred_areas
                 : String(preferred_areas).split(",").map(a => a.trim()).filter(Boolean);
+
+            const parsedCategories = Array.isArray(categories)
+                ? categories.map(c => c.trim()).filter(Boolean)
+                : String(categories).split(",").map(c => c.trim()).filter(Boolean);
+
+            const uniqueCategories = [...new Set(parsedCategories)];
+
+            if (uniqueCategories.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "At least one category is mandatory for signing up as a worker.",
+                });
+            }
 
             const uploadedPhotoUrl = await uploadWorkerPhoto(photo);
 
@@ -195,6 +257,7 @@ const completeProfileController = async(req, res) => {
                 photo: uploadedPhotoUrl,
                 phone,
                 authProvider: "twilio",
+                categories: uniqueCategories,
             });
         }
 
@@ -288,6 +351,35 @@ const firebaseAuthController = async (req, res) => {
         const resolvedEmail = firebaseUser.email || bodyEmail;
         const resolvedName = firebaseUser.name || name;
 
+        // Enforce strict collection selection & role boundary checks
+        if (role === "worker") {
+            const oppositeUser = await User.findOne({
+                $or: [
+                    { firebaseUid: firebaseUser.uid },
+                    ...(resolvedEmail ? [{ email: resolvedEmail }] : [])
+                ]
+            });
+            if (oppositeUser) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This credential belongs to a Customer account. Please sign in as a Customer."
+                });
+            }
+        } else if (role === "user" || role === "users") {
+            const oppositeWorker = await Worker.findOne({
+                $or: [
+                    { firebaseUid: firebaseUser.uid },
+                    ...(resolvedEmail ? [{ email: resolvedEmail }] : [])
+                ]
+            });
+            if (oppositeWorker) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This credential belongs to a Service Partner account. Please sign in as a Service Partner."
+                });
+            }
+        }
+
         // Robust collection selection & lookup logic:
         // If a specific role is passed in the request body (e.g. at signup/login page select), use it.
         // Otherwise (e.g. automatic refresh/onAuthStateChanged check), search both Worker and User.
@@ -331,16 +423,22 @@ const firebaseAuthController = async (req, res) => {
 
         // Check if profile is complete
         const isProfileComplete = (standardRole === "worker")
-            ? (w) => w && w.name && w.age && w.experience !== undefined && w.located_address && w.photo && w.preferred_areas?.length > 0 && w.phone
+            ? (w) => w && w.name && w.age && w.experience !== undefined && w.located_address && w.photo && w.preferred_areas?.length > 0 && w.categories?.length > 0 && w.phone
             : (u) => u && u.name && u.age && u.gender && u.phone;
 
         // If all profile fields provided in body, upsert the account
         if (standardRole === "worker") {
-            const { experience, preferred_areas, located_address, photo } = req.body;
-            if (name && age && experience !== undefined && located_address && photo && preferred_areas && phone) {
+            const { experience, preferred_areas, located_address, photo, categories } = req.body;
+            if (name && age && experience !== undefined && located_address && photo && preferred_areas && phone && categories) {
                 const parsedAreas = Array.isArray(preferred_areas)
                     ? preferred_areas
                     : String(preferred_areas).split(",").map(a => a.trim()).filter(Boolean);
+
+                const parsedCategories = Array.isArray(categories)
+                    ? categories.map(c => c.trim()).filter(Boolean)
+                    : String(categories).split(",").map(c => c.trim()).filter(Boolean);
+
+                const uniqueCategories = [...new Set(parsedCategories)];
 
                 const uploadedPhotoUrl = await uploadWorkerPhoto(photo);
 
@@ -353,6 +451,7 @@ const firebaseAuthController = async (req, res) => {
                     if (!account.located_address) account.located_address = located_address;
                     account.photo = uploadedPhotoUrl || account.photo || photo;
                     if (!account.preferred_areas || account.preferred_areas.length === 0) account.preferred_areas = parsedAreas;
+                    if (!account.categories || account.categories.length === 0) account.categories = uniqueCategories;
                     if (!account.phone) account.phone = phone;
                     if (!account.email && resolvedEmail) account.email = resolvedEmail;
                     await account.save();
@@ -364,6 +463,7 @@ const firebaseAuthController = async (req, res) => {
                         located_address,
                         photo: uploadedPhotoUrl,
                         preferred_areas: parsedAreas,
+                        categories: uniqueCategories,
                         phone,
                         email: resolvedEmail || '',
                         firebaseUid: firebaseUser.uid,
@@ -382,6 +482,7 @@ const firebaseAuthController = async (req, res) => {
                     if (!account.gender) account.gender = gender;
                     if (!account.phone) account.phone = phone;
                     if (!account.email && resolvedEmail) account.email = resolvedEmail;
+                    if (!account.photo && firebaseUser.picture) account.photo = firebaseUser.picture;
                     await account.save();
                 } else {
                     account = await User.create({
@@ -392,6 +493,7 @@ const firebaseAuthController = async (req, res) => {
                         email: resolvedEmail || '',
                         firebaseUid: firebaseUser.uid,
                         authProvider: 'firebase',
+                        photo: firebaseUser.picture || '',
                     });
                 }
             }
@@ -399,6 +501,10 @@ const firebaseAuthController = async (req, res) => {
 
         // If account exists and profile is complete, issue token
         if (account && isProfileComplete(account)) {
+            if (standardRole === "user" && !account.photo && firebaseUser.picture) {
+                account.photo = firebaseUser.picture;
+                await account.save();
+            }
             const token = generateAccessToken({
                 sub: account._id.toString(),
                 role: standardRole,
@@ -420,6 +526,7 @@ const firebaseAuthController = async (req, res) => {
             role: standardRole,
             firebaseUid: firebaseUser.uid,
             email: resolvedEmail,
+            photo: firebaseUser.picture || '',
             needsProfile: true,
         });
 
@@ -452,18 +559,28 @@ const firebaseAuthController = async (req, res) => {
 // Body: { name, age, phone, ...role-specific-fields }
 const firebaseCompleteProfileController = async (req, res) => {
     try {
-        const { firebaseUid, email, role = "user" } = req.user; // from requireSetupToken middleware
+        const { firebaseUid, email, role = "user", photo } = req.user; // from requireSetupToken middleware
         const standardRole = role === "worker" ? "worker" : "user";
 
         if (standardRole === "worker") {
-            const { name, age, experience, located_address, preferred_areas, photo, phone } = req.body;
-            if (!name || !age || experience === undefined || !located_address || !photo || !preferred_areas || !phone) {
-                return res.status(400).json({ success: false, message: 'All worker fields are required: name, age, experience, located_address, preferred_areas, photo and phone are compulsory.' });
+            const { name, age, experience, located_address, preferred_areas, photo, phone, categories } = req.body;
+            if (!name || !age || experience === undefined || !located_address || !photo || !preferred_areas || !phone || !categories) {
+                return res.status(400).json({ success: false, message: 'All worker fields are required: name, age, experience, located_address, preferred_areas, photo, phone and categories are compulsory.' });
             }
 
             const parsedAreas = Array.isArray(preferred_areas)
                 ? preferred_areas
                 : String(preferred_areas).split(",").map(a => a.trim()).filter(Boolean);
+
+            const parsedCategories = Array.isArray(categories)
+                ? categories.map(c => c.trim()).filter(Boolean)
+                : String(categories).split(",").map(c => c.trim()).filter(Boolean);
+
+            const uniqueCategories = [...new Set(parsedCategories)];
+
+            if (uniqueCategories.length === 0) {
+                return res.status(400).json({ success: false, message: 'At least one category is mandatory for signing up as a worker.' });
+            }
 
             const uploadedPhotoUrl = await uploadWorkerPhoto(photo);
 
@@ -483,6 +600,7 @@ const firebaseCompleteProfileController = async (req, res) => {
                 account.located_address = located_address;
                 account.photo = uploadedPhotoUrl || account.photo || photo;
                 account.preferred_areas = parsedAreas;
+                account.categories = uniqueCategories;
                 account.phone = phone;
                 if (!account.email && email) account.email = email;
                 await account.save();
@@ -494,6 +612,7 @@ const firebaseCompleteProfileController = async (req, res) => {
                     located_address,
                     photo: uploadedPhotoUrl,
                     preferred_areas: parsedAreas,
+                    categories: uniqueCategories,
                     phone,
                     email: email || '',
                     firebaseUid,
@@ -538,6 +657,7 @@ const firebaseCompleteProfileController = async (req, res) => {
                 user.gender = gender;
                 user.phone = phone;
                 if (!user.email && email) user.email = email;
+                if (!user.photo && photo) user.photo = photo;
                 await user.save();
             } else {
                 user = await User.create({
@@ -548,6 +668,7 @@ const firebaseCompleteProfileController = async (req, res) => {
                     email: email || '',
                     firebaseUid,
                     authProvider: 'firebase',
+                    photo: photo || '',
                 });
             }
 
@@ -582,27 +703,69 @@ const firebaseCompleteProfileController = async (req, res) => {
 
 const updateProfileController = async (req, res) => {
     try {
-        const { sub } = req.user;
-        const { name, age, gender, phone, email } = req.body;
+        const { sub, role } = req.user;
+        const { name, age, gender, phone, email, photo, experience, located_address, preferred_areas, categories } = req.body;
 
-        const user = await User.findById(sub);
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' });
+        if (role === "worker") {
+            const worker = await Worker.findById(sub);
+            if (!worker) {
+                return res.status(404).json({ success: false, message: 'Worker not found' });
+            }
+
+            if (name !== undefined) worker.name = name;
+            if (age !== undefined) worker.age = Number(age);
+            if (phone !== undefined) worker.phone = phone;
+            if (email !== undefined) worker.email = email;
+            if (experience !== undefined) worker.experience = Number(experience);
+            if (located_address !== undefined) worker.located_address = located_address;
+            
+            if (preferred_areas !== undefined) {
+                worker.preferred_areas = Array.isArray(preferred_areas)
+                    ? preferred_areas
+                    : String(preferred_areas).split(",").map(a => a.trim()).filter(Boolean);
+            }
+            if (categories !== undefined) {
+                const parsedCategories = Array.isArray(categories)
+                    ? categories.map(c => c.trim()).filter(Boolean)
+                    : String(categories).split(",").map(c => c.trim()).filter(Boolean);
+                worker.categories = [...new Set(parsedCategories)];
+            }
+
+            if (photo !== undefined && photo !== "") {
+                const uploadedPhotoUrl = await uploadWorkerPhoto(photo);
+                worker.photo = uploadedPhotoUrl || worker.photo || photo;
+            }
+
+            await worker.save();
+            return res.json({
+                success: true,
+                message: 'Worker profile updated successfully',
+                user: worker,
+            });
+        } else {
+            const user = await User.findById(sub);
+            if (!user) {
+                return res.status(404).json({ success: false, message: 'User not found' });
+            }
+
+            if (name !== undefined) user.name = name;
+            if (age !== undefined) user.age = Number(age);
+            if (gender !== undefined) user.gender = gender;
+            if (phone !== undefined) user.phone = phone;
+            if (email !== undefined) user.email = email;
+
+            if (photo !== undefined && photo !== "") {
+                const uploadedPhotoUrl = await uploadWorkerPhoto(photo);
+                user.photo = uploadedPhotoUrl || user.photo || photo;
+            }
+
+            await user.save();
+            return res.json({
+                success: true,
+                message: 'Profile updated successfully',
+                user,
+            });
         }
-
-        if (name !== undefined) user.name = name;
-        if (age !== undefined) user.age = Number(age);
-        if (gender !== undefined) user.gender = gender;
-        if (phone !== undefined) user.phone = phone;
-        if (email !== undefined) user.email = email;
-
-        await user.save();
-
-        return res.json({
-            success: true,
-            message: 'Profile updated successfully',
-            user,
-        });
     } catch (error) {
         console.error('[updateProfileController]', error);
         return res.status(500).json({ success: false, message: 'Server error: ' + error.message });

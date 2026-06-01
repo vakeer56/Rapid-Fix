@@ -2,7 +2,7 @@ const mongoose = require('mongoose')
 const reviewSchema = new mongoose.Schema({
     user_id: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "user",
+        ref: "users", // Sync to refer to 'users' collection correctly
         required: true,
     },
     worker_id: {
@@ -18,6 +18,6 @@ const reviewSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
-})
+}, { timestamps: true })
 
 module.exports = mongoose.model("reviews", reviewSchema)
