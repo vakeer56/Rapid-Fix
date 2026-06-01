@@ -37,6 +37,12 @@ interface FirebaseConfig {
   measurementId: string;
 }
 
+interface CloudinaryConfig {
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
+}
+
 export default function SuperAdmin() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem("rf_super_admin_authenticated") === "true";
@@ -46,7 +52,7 @@ export default function SuperAdmin() {
   const [adminError, setAdminError] = useState("");
   const [showAdminPass, setShowAdminPass] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "mongodb" | "firebase" | "dotenv">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "mongodb" | "firebase" | "cloudinary" | "dotenv">("dashboard");
   
   // Loading initial configurations from localStorage or defaults
   const [mongo, setMongo] = useState<MongoConfig>(() => {
@@ -69,6 +75,15 @@ export default function SuperAdmin() {
       messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
       appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
       measurementId: import.meta.env.VITE_FIREBASE_MESAURE_ID || ""
+    };
+  });
+
+  const [cloudinary, setCloudinary] = useState<CloudinaryConfig>(() => {
+    const saved = localStorage.getItem("rf_cloudinary_config");
+    return saved ? JSON.parse(saved) : {
+      cloudName: import.meta.env.VITE_CLOUD_NAME || "",
+      apiKey: import.meta.env.VITE_CLOUD_API_KEY || "",
+      apiSecret: import.meta.env.VITE_CLOUD_API_SECRET || ""
     };
   });
 
@@ -111,12 +126,18 @@ export default function SuperAdmin() {
     setLogs((prev) => [`[${timestamp}] ${message}`, ...prev.slice(0, 15)]);
   };
 
-  const syncConfigsToServer = async (targetMongo: MongoConfig, targetFirebase: FirebaseConfig) => {
+  const syncConfigsToServer = async (
+    targetMongo: MongoConfig, 
+    targetFirebase: FirebaseConfig, 
+    targetCloudinary?: CloudinaryConfig
+  ) => {
+    const activeCloudinary = targetCloudinary || cloudinary;
     addLog("[SYSTEM] Initiating server-side .env sync operation...");
     try {
       const response = await api.post("/auth/admin/sync-config", {
         mongo: targetMongo,
-        firebase: targetFirebase
+        firebase: targetFirebase,
+        cloudinary: activeCloudinary
       });
       if (response.data && response.data.success) {
         addLog(`[SYSTEM] Sync successful! Database: ${response.data.dbStatus}`);
@@ -137,14 +158,21 @@ export default function SuperAdmin() {
     e.preventDefault();
     localStorage.setItem("rf_mongo_config", JSON.stringify(mongo));
     addLog(`[MONGO] Dynamic configurations updated locally: dbName=${mongo.dbName}`);
-    await syncConfigsToServer(mongo, firebase);
+    await syncConfigsToServer(mongo, firebase, cloudinary);
   };
 
   const handleSaveFirebase = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem("rf_firebase_config", JSON.stringify(firebase));
     addLog(`[FIREBASE] Dynamic credentials updated locally: apiKey=${(firebase.apiKey || "").substring(0, 8)}...`);
-    await syncConfigsToServer(mongo, firebase);
+    await syncConfigsToServer(mongo, firebase, cloudinary);
+  };
+
+  const handleSaveCloudinary = async (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem("rf_cloudinary_config", JSON.stringify(cloudinary));
+    addLog(`[CLOUDINARY] Dynamic credentials updated locally: cloudName=${cloudinary.cloudName}`);
+    await syncConfigsToServer(mongo, firebase, cloudinary);
   };
 
   const triggerSaveSuccess = () => {
@@ -185,6 +213,11 @@ VITE_FIREBASE_STORAGE_BUCKET=${firebase.storageBucket}
 VITE_FIREBASE_MESSAGING_SENDER_ID=${firebase.messagingSenderId}
 VITE_FIREBASE_APP_ID=${firebase.appId}
 VITE_FIREBASE_MESAURE_ID=${firebase.measurementId}
+
+# Cloudinary Configuration
+CLOUD_NAME=${cloudinary.cloudName}
+CLOUD_API_KEY=${cloudinary.apiKey}
+CLOUD_API_SECRET=${cloudinary.apiSecret}
 `;
   };
 
@@ -209,6 +242,7 @@ VITE_FIREBASE_MESAURE_ID=${firebase.measurementId}
   const resetToEnvDefaults = () => {
     localStorage.removeItem("rf_mongo_config");
     localStorage.removeItem("rf_firebase_config");
+    localStorage.removeItem("rf_cloudinary_config");
     
     setMongo({
       uri: "mongodb://localhost:27017",
@@ -225,6 +259,12 @@ VITE_FIREBASE_MESAURE_ID=${firebase.measurementId}
       messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
       appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
       measurementId: import.meta.env.VITE_FIREBASE_MESAURE_ID || ""
+    });
+
+    setCloudinary({
+      cloudName: import.meta.env.VITE_CLOUD_NAME || "",
+      apiKey: import.meta.env.VITE_CLOUD_API_KEY || "",
+      apiSecret: import.meta.env.VITE_CLOUD_API_SECRET || ""
     });
 
     addLog("[SYSTEM] Reset all dynamic values. Falling back to native .env.");
@@ -360,6 +400,7 @@ VITE_FIREBASE_MESAURE_ID=${firebase.measurementId}
             { id: "dashboard", label: "Dashboard Overview", icon: <Activity size={18} /> },
             { id: "mongodb", label: "MongoDB Configs", icon: <Database size={18} /> },
             { id: "firebase", label: "Firebase Settings", icon: <Flame size={18} /> },
+            { id: "cloudinary", label: "Cloudinary Settings", icon: <Sparkles size={18} /> },
             { id: "dotenv", label: ".env Sync Hub", icon: <Code size={18} /> }
           ].map((tab) => (
             <button
@@ -666,6 +707,72 @@ VITE_FIREBASE_MESAURE_ID=${firebase.measurementId}
                 >
                   <Save size={16} />
                   Save Firebase Keys
+                </button>
+              </div>
+
+            </form>
+          )}
+
+          {/* TAB 4: CLOUDINARY CREDENTIALS */}
+          {activeTab === "cloudinary" && (
+            <form onSubmit={handleSaveCloudinary} className="space-y-6">
+              
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Sparkles className="text-amber-500" size={24} />
+                  Cloudinary Configuration
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Configure dynamic media assets cloud parameters to stream, save, and retrieve technician diagnostic photos and videos smoothly.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Cloud Name</label>
+                  <input
+                    type="text"
+                    value={cloudinary.cloudName}
+                    onChange={(e) => setCloudinary({ ...cloudinary, cloudName: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
+                    placeholder="e.g. rapidfixcloud"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">API Key</label>
+                  <input
+                    type="text"
+                    value={cloudinary.apiKey}
+                    onChange={(e) => setCloudinary({ ...cloudinary, apiKey: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
+                    placeholder="e.g. 192839281923"
+                    required
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-semibold mb-2">API Secret</label>
+                  <input
+                    type="password"
+                    value={cloudinary.apiSecret}
+                    onChange={(e) => setCloudinary({ ...cloudinary, apiSecret: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
+                    placeholder="••••••••••••••••••••••••••••••••"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-gray-200/50 dark:border-slate-800/50 flex justify-end">
+                <button
+                  type="submit"
+                  className="bg-blue-900 dark:bg-orange-600 text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-blue-800 dark:hover:bg-orange-500 transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Save size={16} />
+                  Save Cloudinary Media Keys
                 </button>
               </div>
 

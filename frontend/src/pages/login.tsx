@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import { auth, googleProvider } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
@@ -43,8 +44,38 @@ export const Login = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [selectedRole, setSelectedRole] = useState<"user" | "worker">("user");
+
+  // Forgot password states
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState("");
+  const [forgotError, setForgotError] = useState("");
+
+  const handleForgotPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setForgotError("");
+    setForgotSuccess("");
+    if (!forgotEmail) {
+      setForgotError("Please enter your email address.");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, forgotEmail);
+      setForgotSuccess("Password reset link sent! Check your email inbox.");
+      setForgotEmail("");
+    } catch (err: any) {
+      console.error("Forgot password error:", err);
+      setForgotError(err.message || "Failed to send reset link.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   const handleBackendAuth = async (idToken: string) => {
-    const res = await api.post("/auth/firebase", { idToken });
+    const res = await api.post("/auth/firebase", { idToken, role: selectedRole });
     const data = res.data;
     if (data.success && !data.needsProfile) {
       onAuthSuccess(data.token, data.user);
@@ -98,41 +129,41 @@ export const Login = () => {
   return (
     <>
       <div className="min-h-screen flex overflow-hidden bg-slate-950 font-sans">
-        {/* ── Left Branding Panel ── */}
-        <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex-col items-center justify-between p-12 overflow-hidden animate-slide-left border-r border-slate-900/50">
+        {/* ── Left Branding Panel (Swapped & narrower for elegant, static presentation) ── */}
+        <div className="hidden lg:flex lg:w-1/2 xl:w-[45%] relative bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex-col items-center justify-between p-12 overflow-hidden order-1 lg:order-1 animate-slide-left border-r border-slate-900/50">
           <Shapes />
 
-          {/* Logo Centered and Larger */}
+          {/* Logo Centered */}
           <div className="w-full relative z-10 flex justify-center mb-8">
             <Link to="/" className="inline-block transition-transform duration-300 hover:scale-105">
-              <img src={logo} alt="RapidFix Logo" className="h-32 object-contain brightness-125" />
+              <img src={logo} alt="RapidFix Logo" className="h-28 object-contain brightness-125" />
             </Link>
           </div>
 
           {/* Centralized Brand Showcase */}
-          <div className="relative z-10 text-center w-full max-w-lg my-auto py-6">
-            <h1 className="text-5xl xl:text-6xl font-extrabold tracking-tight text-white leading-tight mb-6">
+          <div className="relative z-10 text-center w-full max-w-sm my-auto py-6">
+            <h1 className="text-4xl xl:text-5xl font-extrabold tracking-tight text-white leading-tight mb-6">
               Fix it fast.
               <br />
               <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent animate-pulse-glow">
                 Fix it right.
               </span>
             </h1>
-            <p className="text-slate-400 text-sm leading-relaxed max-w-md mx-auto mb-8">
+            <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-xs mx-auto mb-8 font-medium">
               Connecting you with certified technicians for plumbing, electrical, CCTV, and appliance repairs instantly.
             </p>
 
             {/* Glowing Micro-Cards to Fill Emptiness */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 transition-transform duration-300 hover:scale-[1.03] shadow-lg">
-                <div className="text-orange-400 text-xl mb-1.5">⚡</div>
-                <h4 className="text-white text-xs font-bold">60-Min Arrival</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">Emergency technicians nearby</p>
+                <div className="text-orange-400 text-lg mb-1">⚡</div>
+                <h4 className="text-white text-[10px] font-bold">60-Min Arrival</h4>
+                <p className="text-[9px] text-slate-400 mt-0.5">Emergency pros nearby</p>
               </div>
               <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 transition-transform duration-300 hover:scale-[1.03] shadow-lg">
-                <div className="text-amber-400 text-xl mb-1.5">⭐</div>
-                <h4 className="text-white text-xs font-bold">4.9/5 Average Rating</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">Highly rated local experts</p>
+                <div className="text-amber-400 text-lg mb-1">⭐</div>
+                <h4 className="text-white text-[10px] font-bold">4.9/5 Rating</h4>
+                <p className="text-[9px] text-slate-400 mt-0.5">Highly rated experts</p>
               </div>
             </div>
           </div>
@@ -143,10 +174,10 @@ export const Login = () => {
           </div>
         </div>
 
-        {/* ── Right Auth Panel ── */}
-        <div className="w-full lg:w-1/2 xl:w-[45%] flex items-center justify-center p-6 sm:p-12 animate-slide-right bg-slate-950">
-          {/* Frosted Glass Form Card Container to Anchor Elements */}
-          <div className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 sm:p-10 shadow-2xl shadow-black/50">
+        {/* ── Right Auth Panel (Swapped, wider, py-16 padding & justify-start to ensure top form is never cut off!) ── */}
+        <div className="w-full lg:w-1/2 xl:w-[55%] h-screen overflow-y-auto flex flex-col items-center justify-start py-16 px-6 sm:px-12 order-2 lg:order-2 animate-slide-right bg-slate-950 scrollbar-thin">
+          {/* Frosted Glass Form Card Container to Anchor Elements - Sized beautifully at max-w-md! */}
+          <div className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 sm:p-10 shadow-2xl shadow-black/50 my-4">
             {/* Mobile Header Logo */}
             <div className="lg:hidden flex justify-center mb-8">
               <Link to="/" className="transition-transform duration-200 hover:scale-105">
@@ -162,6 +193,58 @@ export const Login = () => {
                 Log in to coordinate your home maintenance schedules.
               </p>
             </div>
+
+            {/* Sliding Role Switcher Pill (Upgraded to be extremely prominent & readable) */}
+            <div className="relative flex p-1.5 bg-slate-950/80 border-2 border-slate-700/80 rounded-2xl mb-5 shadow-inner">
+              <div 
+                className="absolute top-1.5 bottom-1.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 transition-all duration-300 shadow-lg shadow-orange-600/30"
+                style={{
+                  left: selectedRole === "user" ? "6px" : "50%",
+                  right: selectedRole === "user" ? "50%" : "6px",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setSelectedRole("user")}
+                className={`relative z-10 w-1/2 py-3.5 text-sm font-black uppercase tracking-wider transition-colors duration-300 cursor-pointer ${
+                  selectedRole === "user" ? "text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Customer Login
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedRole("worker")}
+                className={`relative z-10 w-1/2 py-3.5 text-sm font-black uppercase tracking-wider transition-colors duration-300 cursor-pointer ${
+                  selectedRole === "worker" ? "text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Service Partner
+              </button>
+            </div>
+
+            {/* Highly visible active portal explanation badge for aged/non-trendy partners */}
+            {selectedRole === "worker" ? (
+              <div className="bg-orange-500/10 border border-orange-500/40 rounded-2xl p-4 mb-6 flex items-center gap-3.5 animate-pulse-glow shadow-md shadow-orange-500/[0.02]">
+                <div className="w-12 h-12 rounded-xl bg-orange-600 flex items-center justify-center text-white text-2xl shrink-0 shadow-lg shadow-orange-600/20">🛠️</div>
+                <div>
+                  <h4 className="text-white text-xs font-black tracking-wider uppercase">SERVICE PARTNER PORTAL ACTIVE</h4>
+                  <p className="text-orange-300 text-[10px] sm:text-xs mt-1 leading-normal font-bold">
+                    This section is for **Plumbers, Electricians, and Technicians** looking for customer repair jobs.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-blue-500/10 border border-blue-500/40 rounded-2xl p-4 mb-6 flex items-center gap-3.5 shadow-md shadow-blue-500/[0.02]">
+                <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white text-2xl shrink-0 shadow-lg shadow-blue-600/20">🏠</div>
+                <div>
+                  <h4 className="text-white text-xs font-black tracking-wider uppercase">CUSTOMER PORTAL ACTIVE</h4>
+                  <p className="text-blue-300 text-[10px] sm:text-xs mt-1 leading-normal font-bold">
+                    This section is for **Customers** looking to get their home issues fixed by our experts.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Google button (Corrected Text Color to be highly visible) */}
             <button
@@ -210,9 +293,7 @@ export const Login = () => {
                   <button
                     type="button"
                     className="text-[10px] text-blue-400 hover:underline font-bold cursor-pointer"
-                    onClick={() => {
-                      navigate("/profile");
-                    }}
+                    onClick={() => setForgotOpen(true)}
                   >
                     Forgot?
                   </button>
@@ -278,7 +359,69 @@ export const Login = () => {
         isOpen={needsProfile}
         prefillName={pendingFirebaseUser?.name}
         prefillEmail={pendingFirebaseUser?.email}
+        role={selectedRole}
       />
+
+      {/* Forgot Password Modal */}
+      {forgotOpen && (
+        <div className="fixed inset-0 z-[999] backdrop-blur-sm bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative animate-scale-up">
+            
+            <button
+              type="button"
+              onClick={() => {
+                setForgotOpen(false);
+                setForgotError("");
+                setForgotSuccess("");
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors cursor-pointer text-xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-800"
+            >
+              &times;
+            </button>
+
+            <div className="text-center mb-6">
+              <h3 className="text-xl font-bold text-white">Reset Password</h3>
+              <p className="text-xs text-slate-300 mt-2">
+                Enter your registered email address and we'll send you a secure link to reset your password.
+              </p>
+            </div>
+
+            {forgotError && (
+              <div className="mb-4 text-xs text-red-400 bg-red-950/20 border border-red-900 rounded-xl px-4 py-2.5 font-bold">
+                ⚠ {forgotError}
+              </div>
+            )}
+
+            {forgotSuccess && (
+              <div className="mb-4 text-xs text-emerald-400 bg-emerald-950/20 border border-emerald-900 rounded-xl px-4 py-2.5 font-bold">
+                ✓ {forgotSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div>
+                <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1.5 ml-0.5">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-slate-950/60 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all text-sm animate-fade-in"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={forgotLoading}
+                className="w-full py-3.5 rounded-xl font-bold text-white text-xs bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-60 transition-all cursor-pointer shadow-lg shadow-orange-500/10 active:scale-[0.98]"
+              >
+                {forgotLoading ? "Sending Link…" : "Send Reset Link"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 };

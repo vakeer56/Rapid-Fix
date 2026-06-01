@@ -13,7 +13,8 @@ require('dotenv').config();
 
 const problemRoutes = require('../backend/routes/problem.Route.js');
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/address', addressRouter);
 app.use('/getProblems', getProblemsRouter);
 app.use('/reviews', reviewsRouter);
@@ -21,7 +22,7 @@ app.use('/reviews', reviewsRouter);
 
 connectDB();
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 
 const PORT = process.env.PORT || 3000;

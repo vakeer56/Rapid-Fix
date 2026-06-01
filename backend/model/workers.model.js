@@ -32,6 +32,14 @@ const workersSchema = new mongoose.Schema(
         located_address: {
             type: String
         },
+        email: {
+            type: String,
+            default: ""
+        },
+        photo: {
+            type: String,
+            default: ""
+        },
         verificationStatus: {
             type: Boolean,
             default: false

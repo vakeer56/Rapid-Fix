@@ -20,8 +20,14 @@ export interface AppUser {
   name: string;
   email: string;
   phone: string;
+  role?: "user" | "worker" | "admin";
   age?: number;
   gender?: string;
+  experience?: number;
+  located_address?: string;
+  preferred_areas?: string[];
+  photo?: string;
+  verificationStatus?: boolean;
   firebaseUid: string;
 }
 
@@ -131,6 +137,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Already have a valid app token (persisted from previous session)
       const existingToken = localStorage.getItem("rf_app_token");
       if (existingToken && appUser) {
+        setLoading(false);
+        return;
+      }
+
+      // Skip automatic backend lookup if in the middle of active email/password registration
+      if (localStorage.getItem("rf_is_registering") === "true") {
         setLoading(false);
         return;
       }

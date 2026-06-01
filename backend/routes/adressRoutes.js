@@ -1,5 +1,5 @@
 const express = require("express");
-const { addAddress, getAddress, deleteAddress, getAddressesByUser, updateAddressAddress, updateAddressPinCode, updateAddressDistrict, updateAddressCity, updateAddressArea, updateAddressState } = require("../controllers/addressController");
+const { addAddress, getAddress, deleteAddress, getAddressesByUser, updateAddressAddress, updateAddressPinCode, updateAddressDistrict, updateAddressCity, updateAddressArea, updateAddressState, getPincodeDetails } = require("../controllers/addressController");
 
 
 const router = express.Router();
@@ -8,6 +8,7 @@ router.post("/addAddress", addAddress);
 router.get("/getAddress/:addressId", getAddress);
 router.delete("/deleteAddress/:addressId", deleteAddress);
 router.get("/getAddressesByUserId", getAddressesByUser);
+router.get("/pincode/:pincode", getPincodeDetails);
 router.put("/updateAddressAddress/:addressId", updateAddressAddress);
 router.put("/updateAddressPinCode/:addressId", updateAddressPinCode);
 router.put("/updateAddressDistrict/:addressId", updateAddressDistrict);

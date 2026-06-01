@@ -1,7 +1,19 @@
 import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../service/api";
-import { MapPin, AlertCircle, Upload, CheckCircle } from "lucide-react";
+import { 
+  MapPin, 
+  AlertCircle, 
+  Upload, 
+  CheckCircle, 
+  ArrowLeft, 
+  Sparkles, 
+  ShieldCheck, 
+  Zap, 
+  Image as ImageIcon,
+  Video as VideoIcon,
+  Loader2
+} from "lucide-react";
 
 type ProblemProps = {
   open: boolean;
@@ -16,6 +28,45 @@ interface SavedAddress {
   city: string;
 }
 
+const INDIAN_STATES = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Andaman and Nicobar Islands",
+  "Chandigarh",
+  "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi",
+  "Jammu and Kashmir",
+  "Ladakh",
+  "Lakshadweep",
+  "Puducherry"
+];
+
 export default function Problem({ open, setopen, onProblemCreated }: ProblemProps) {
   const { appUser } = useAuth();
   
@@ -26,9 +77,11 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
     urgency: false,
   });
 
-  // Files
+  // Files & Previews
   const [picture, setPicture] = useState<File | null>(null);
+  const [picturePreview, setPicturePreview] = useState<string>("");
   const [video, setVideo] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string>("");
 
   // Address logic
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
@@ -42,6 +95,44 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
     state: "",
     pin_code: "",
   });
+  const [pincodeLoading, setPincodeLoading] = useState(false);
+
+  const handlePincodeChange = async (pin: string) => {
+    const cleanPin = pin.replace(/\D/g, "").slice(0, 6);
+    setNewAddress(prev => ({ ...prev, pin_code: cleanPin }));
+
+    if (cleanPin.length === 6) {
+      setPincodeLoading(true);
+      try {
+        const res = await api.get(`/address/pincode/${cleanPin}`);
+        const data = res.data;
+        if (data && data[0] && data[0].Status === "Success" && data[0].PostOffice?.length > 0) {
+          const office = data[0].PostOffice[0];
+          
+          let matchedState = office.State;
+          if (matchedState.toLowerCase() === "tamilnadu") {
+            matchedState = "Tamil Nadu";
+          }
+          
+          const standardState = INDIAN_STATES.find(
+            s => s.toLowerCase().replace(/\s+/g, "") === matchedState.toLowerCase().replace(/\s+/g, "")
+          ) || matchedState;
+
+          const resolvedCity = office.Block && office.Block !== "NA" ? office.Block : office.District;
+          setNewAddress(prev => ({
+            ...prev,
+            city: resolvedCity || prev.city,
+            district: office.District || prev.district,
+            state: standardState || prev.state,
+          }));
+        }
+      } catch (err) {
+        console.error("Error fetching pincode details inside Problem:", err);
+      } finally {
+        setPincodeLoading(false);
+      }
+    }
+  };
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -93,10 +184,13 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, files } = e.target;
     if (files && files[0]) {
+      const file = files[0];
       if (name === "picture") {
-        setPicture(files[0]);
+        setPicture(file);
+        setPicturePreview(URL.createObjectURL(file));
       } else if (name === "video") {
-        setVideo(files[0]);
+        setVideo(file);
+        setVideoPreview(file.name);
       }
     }
   };
@@ -177,7 +271,9 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
         setSuccess(false);
         setformdata({ problemname: "", description: "", urgency: false });
         setPicture(null);
+        setPicturePreview("");
         setVideo(null);
+        setVideoPreview("");
         if (onProblemCreated) onProblemCreated();
       }, 1800);
 
@@ -192,231 +288,391 @@ export default function Problem({ open, setopen, onProblemCreated }: ProblemProp
   if (!open) return null;
 
   return (
-    <section className="fixed inset-0 backdrop-blur-sm bg-black/50 dark:bg-black/75 z-[999] flex items-center justify-center p-4 overflow-y-auto">
-      <div className="relative bg-white dark:bg-slate-900 rounded-3xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 my-8 max-h-[90vh] overflow-y-auto">
-        <button
-          onClick={() => setopen(false)}
-          className="absolute top-4 right-4 text-2xl font-bold text-slate-400 hover:text-red-500 dark:hover:text-red-400 w-10 h-10 transition-colors flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-850 cursor-pointer"
-        >
-          &times;
-        </button>
+    <section className="fixed inset-0 z-[999] bg-slate-950 flex flex-col lg:flex-row overflow-hidden animate-fade-in font-sans">
+      
+      {/* ── LEFT IMMERSIVE BRANDING PANEL (35% Width) ── */}
+      <div className="hidden lg:flex lg:w-[35%] xl:w-[30%] bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 relative flex-col justify-between p-12 overflow-hidden border-r border-slate-900/60">
+        
+        {/* Dynamic Glowing Background Effects */}
+        <div className="absolute top-[-10%] right-[-10%] w-[300px] h-[300px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-[300px] h-[300px] bg-orange-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
-        {success ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <CheckCircle className="w-16 h-16 text-emerald-500 mb-4 animate-bounce" />
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Request Raised Successfully!</h3>
-            <p className="text-slate-500 dark:text-slate-400 mt-2">Connecting with technicians near you…</p>
+        {/* Brand/Portal Header */}
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500">
+            <Zap className="w-5 h-5 animate-pulse" />
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">Raise a Service Request</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Describe the problem and select an address to summon a certified technician.
-              </p>
+          <span className="text-sm font-extrabold tracking-wider text-white uppercase">RapidFix Portal</span>
+        </div>
+
+        {/* Central Core Progress / Value Props */}
+        <div className="relative z-10 space-y-8 my-auto">
+          <div>
+            <h1 className="text-3xl font-extrabold text-white leading-tight">
+              Raise a<br />
+              <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">
+                Service Request
+              </span>
+            </h1>
+            <p className="text-xs text-slate-400 mt-3 leading-relaxed">
+              Define your repair needs, upload diagnostics, and dispatch background-verified specialists to your home.
+            </p>
+          </div>
+
+          {/* Value Progress Checklist */}
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500/15 border border-orange-500/30 text-orange-400 text-xs shrink-0 font-bold">1</div>
+              <div>
+                <h4 className="text-xs font-bold text-white">Describe Your Problem</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Specify AC, plumbing, or electric issues</p>
+              </div>
             </div>
 
-            {error && (
-              <div className="flex items-center gap-3 text-red-500 text-sm bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-2xl px-4 py-3">
-                <AlertCircle size={18} className="shrink-0" />
-                <span>{error}</span>
+            <div className="flex gap-3">
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-900 border border-slate-800 text-slate-400 text-xs shrink-0 font-bold">2</div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-300">Address & Diagnostics</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Upload visual guides and select the location</p>
               </div>
-            )}
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Left Column: Details */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Problem Name</label>
-                  <input
-                    type="text"
-                    name="problemname"
-                    value={formdata.problemname}
-                    onChange={handleInputChange}
-                    placeholder="e.g. Living Room AC Not Cooling"
-                    className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm"
-                    required
-                  />
-                </div>
+            <div className="flex gap-3">
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-900 border border-slate-800 text-slate-400 text-xs shrink-0 font-bold">3</div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-300">Dynamic Dispatch</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Rapidly matches you with background-verified Pros</p>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Detailed Description</label>
-                  <textarea
-                    name="description"
-                    value={formdata.description}
-                    onChange={handleInputChange}
-                    placeholder="Provide details of the issue (e.g. making weird noise, water dripping…)"
-                    rows={4}
-                    className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm resize-none"
-                    required
-                  />
-                </div>
+        {/* Verified Badging */}
+        <div className="relative z-10 bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl p-4 flex gap-3 items-center">
+          <ShieldCheck className="text-emerald-400 w-8 h-8 shrink-0" />
+          <div>
+            <h4 className="text-white font-bold text-[11px]">100% Background Verified</h4>
+            <p className="text-[9px] text-slate-400 mt-0.5">All local service providers are certified & background-verified.</p>
+          </div>
+        </div>
 
-                <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800">
-                  <input
-                    type="checkbox"
-                    id="urgency"
-                    name="urgency"
-                    checked={formdata.urgency}
-                    onChange={handleInputChange}
-                    className="w-5 h-5 rounded border-slate-300 dark:border-slate-600 text-blue-600 dark:text-orange-500 focus:ring-blue-500 dark:focus:ring-orange-500 cursor-pointer"
-                  />
-                  <label htmlFor="urgency" className="block text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
-                    Urgent Request <span className="text-red-500 dark:text-orange-400 font-normal">(Emergency technicians requested)</span>
-                  </label>
+      </div>
+
+      {/* ── RIGHT DYNAMIC FORM PANEL (Full Width / Rest of Screen) ── */}
+      <div className="flex-1 bg-slate-950/95 backdrop-blur-xl relative flex flex-col justify-between overflow-y-auto">
+        
+        {/* Full-width Close Button */}
+        <button
+          onClick={() => setopen(false)}
+          className="absolute top-6 right-8 z-10 text-slate-400 hover:text-white transition-all w-11 h-11 flex items-center justify-center rounded-full bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer shadow-lg active:scale-95"
+          title="Close Portal"
+        >
+          <ArrowLeft size={16} />
+        </button>
+
+        {/* Dynamic Center Panel */}
+        <div className="w-full max-w-4xl mx-auto px-6 py-12 sm:px-12 md:py-16 my-auto">
+          {success ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center animate-pulse-glow">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-6">
+                <CheckCircle className="w-10 h-10 animate-bounce" />
+              </div>
+              <h2 className="text-3xl font-extrabold text-white">Request Dispatched Successfully!</h2>
+              <p className="text-slate-400 text-sm mt-3 max-w-md mx-auto leading-relaxed">
+                Your emergency request is active. We are matching background-verified technicians near your location right now.
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-8 animate-slide-up">
+              
+              {/* Header Title for Mobile / Tablet */}
+              <div className="lg:hidden space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-500">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">RapidFix Portal</span>
                 </div>
+                <h2 className="text-3xl font-extrabold text-white">Raise a Service Request</h2>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Provide repair details, diagnostics, and address to summons immediate technical services.
+                </p>
               </div>
 
-              {/* Right Column: Files & Address */}
-              <div className="space-y-4">
-                {/* Uploads */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Add Photo</label>
-                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors rounded-xl p-3 cursor-pointer text-center h-28 relative">
-                      <Upload size={20} className="text-slate-400 mb-1.5" />
-                      <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate max-w-full">
-                        {picture ? picture.name : "Upload Image"}
-                      </span>
-                      <input type="file" name="picture" accept="image/*" onChange={handleFileChange} className="hidden" />
-                    </label>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Add Video</label>
-                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors rounded-xl p-3 cursor-pointer text-center h-28 relative">
-                      <Upload size={20} className="text-slate-400 mb-1.5" />
-                      <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate max-w-full">
-                        {video ? video.name : "Upload Clip"}
-                      </span>
-                      <input type="file" name="video" accept="video/*" onChange={handleFileChange} className="hidden" />
-                    </label>
-                  </div>
+              {error && (
+                <div className="flex items-center gap-3 text-red-400 text-xs bg-red-950/20 border border-red-900/40 rounded-2xl px-5 py-4 animate-fade-in">
+                  <AlertCircle size={16} className="shrink-0 animate-pulse" />
+                  <span>{error}</span>
                 </div>
+              )}
 
-                {/* Address Selection */}
-                <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 bg-slate-50/50 dark:bg-slate-850/30">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <MapPin size={14} className="text-blue-500" />
-                      Service Address
-                    </span>
-                    {addresses.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowNewAddressForm((v) => !v)}
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold"
-                      >
-                        {showNewAddressForm ? "Select Saved" : "+ Add New"}
-                      </button>
-                    )}
+              {/* 2-Column Desktop Grid for Forms */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                {/* Column 1: Details */}
+                <div className="space-y-5">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 ml-0.5">Problem Name</label>
+                    <input
+                      type="text"
+                      name="problemname"
+                      value={formdata.problemname}
+                      onChange={handleInputChange}
+                      placeholder="e.g. Living Room AC Not Cooling"
+                      className="w-full border border-slate-800 bg-slate-900/40 text-white placeholder-slate-500 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent transition-all text-sm"
+                      required
+                    />
                   </div>
 
-                  {!showNewAddressForm ? (
-                    <div>
-                      <select
-                        value={selectedAddressId}
-                        onChange={(e) => setSelectedAddressId(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none cursor-pointer"
-                      >
-                        {addresses.map((addr) => (
-                          <option key={addr._id} value={addr._id}>
-                            {addr.address}, {addr.area} ({addr.city})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 ml-0.5">Detailed Description</label>
+                    <textarea
+                      name="description"
+                      value={formdata.description}
+                      onChange={handleInputChange}
+                      placeholder="Describe what's happening (e.g. compressor makes a clicking noise, water leaking from vent...)"
+                      rows={5}
+                      className="w-full border border-slate-800 bg-slate-900/40 text-white placeholder-slate-500 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent transition-all text-sm resize-none scrollbar-thin"
+                      required
+                    />
+                  </div>
+
+                  {/* Urgency Glowing Slider card */}
+                  <div className={`p-4 rounded-2xl border transition-all duration-300 ${
+                    formdata.urgency 
+                      ? "bg-orange-500/10 border-orange-500/30 shadow-lg shadow-orange-500/5" 
+                      : "bg-slate-900/40 border-slate-800"
+                  }`}>
+                    <div className="flex items-start gap-3.5">
                       <input
-                        type="text"
-                        name="address"
-                        placeholder="Street Address / Door No."
-                        value={newAddress.address}
-                        onChange={handleNewAddressChange}
-                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
-                        required={showNewAddressForm}
+                        type="checkbox"
+                        id="urgency"
+                        name="urgency"
+                        checked={formdata.urgency}
+                        onChange={handleInputChange}
+                        className="w-5 h-5 mt-0.5 rounded border-slate-700 bg-slate-950 text-orange-500 focus:ring-orange-500 focus:ring-offset-slate-950 cursor-pointer"
                       />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          name="area"
-                          placeholder="Area / Locality"
-                          value={newAddress.area}
-                          onChange={handleNewAddressChange}
-                          className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
-                          required={showNewAddressForm}
-                        />
-                        <input
-                          type="text"
-                          name="city"
-                          placeholder="City"
-                          value={newAddress.city}
-                          onChange={handleNewAddressChange}
-                          className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
-                          required={showNewAddressForm}
-                        />
+                      <div className="cursor-pointer" onClick={() => setformdata(f => ({ ...f, urgency: !f.urgency }))}>
+                        <label htmlFor="urgency" className="block text-xs font-extrabold text-white cursor-pointer flex items-center gap-1.5">
+                          <Zap size={14} className={formdata.urgency ? "text-orange-400 fill-orange-400 animate-pulse" : "text-slate-400"} />
+                          Urgent Emergency Dispatch
+                        </label>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                          Check this if you need immediate local attention. Nearby emergency technicians are pinged first.
+                        </p>
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <input
-                          type="text"
-                          name="district"
-                          placeholder="District"
-                          value={newAddress.district}
-                          onChange={handleNewAddressChange}
-                          className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
-                          required={showNewAddressForm}
-                        />
-                        <input
-                          type="text"
-                          name="state"
-                          placeholder="State"
-                          value={newAddress.state}
-                          onChange={handleNewAddressChange}
-                          className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
-                          required={showNewAddressForm}
-                        />
-                        <input
-                          type="text"
-                          name="pin_code"
-                          placeholder="Pin Code"
-                          value={newAddress.pin_code}
-                          onChange={handleNewAddressChange}
-                          className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
-                          required={showNewAddressForm}
-                        />
-                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Column 2: Uploads & Addresses */}
+                <div className="space-y-5">
+                  
+                  {/* Uploads row */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Diagnostic Photo</label>
+                      <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-3 cursor-pointer text-center h-28 relative overflow-hidden transition-all duration-300 ${
+                        picturePreview 
+                          ? "border-emerald-500/30 bg-emerald-950/10 hover:bg-emerald-950/20" 
+                          : "border-slate-800 bg-slate-900/40 hover:bg-slate-900/60"
+                      }`}>
+                        {picturePreview ? (
+                          <>
+                            <img src={picturePreview} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center p-2">
+                              <ImageIcon size={18} className="text-emerald-400 mb-1" />
+                              <span className="text-[8px] font-bold text-white truncate max-w-full">{picture?.name}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={18} className="text-slate-500 mb-1.5" />
+                            <span className="text-[10px] font-bold text-slate-300">Upload Image</span>
+                            <span className="text-[8px] text-slate-500 mt-0.5">JPG, PNG up to 5MB</span>
+                          </>
+                        )}
+                        <input type="file" name="picture" accept="image/*" onChange={handleFileChange} className="hidden" />
+                      </label>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Diagnostic Video</label>
+                      <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-3 cursor-pointer text-center h-28 relative overflow-hidden transition-all duration-300 ${
+                        videoPreview 
+                          ? "border-emerald-500/30 bg-emerald-950/10 hover:bg-emerald-950/20" 
+                          : "border-slate-800 bg-slate-900/40 hover:bg-slate-900/60"
+                      }`}>
+                        {videoPreview ? (
+                          <div className="absolute inset-0 bg-emerald-950/20 flex flex-col items-center justify-center p-2">
+                            <VideoIcon size={18} className="text-emerald-400 mb-1 animate-pulse" />
+                            <span className="text-[8px] font-bold text-emerald-300 truncate max-w-full">{videoPreview}</span>
+                            <span className="text-[7px] text-slate-400 mt-0.5 font-semibold uppercase">Video Attached</span>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload size={18} className="text-slate-500 mb-1.5" />
+                            <span className="text-[10px] font-bold text-slate-300">Upload Clip</span>
+                            <span className="text-[8px] text-slate-500 mt-0.5">MP4, MOV up to 15MB</span>
+                          </>
+                        )}
+                        <input type="file" name="video" accept="video/*" onChange={handleFileChange} className="hidden" />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Service Address Module */}
+                  <div className="border border-slate-800 rounded-2xl p-4 bg-slate-900/30">
+                    <div className="flex items-center justify-between mb-3 border-b border-slate-900 pb-2.5">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <MapPin size={12} className="text-orange-500" />
+                        Service Address
+                      </span>
                       {addresses.length > 0 && (
                         <button
                           type="button"
-                          onClick={() => setShowNewAddressForm(false)}
-                          className="text-[10px] text-slate-500 dark:text-slate-400 hover:underline block text-right w-full mt-1"
+                          onClick={() => setShowNewAddressForm((v) => !v)}
+                          className="text-[10px] text-orange-400 hover:text-orange-300 transition-colors font-bold cursor-pointer"
                         >
-                          Cancel
+                          {showNewAddressForm ? "Select Saved Address" : "+ Create New Address"}
                         </button>
                       )}
                     </div>
-                  )}
+
+                    {!showNewAddressForm ? (
+                      <div>
+                        <select
+                          value={selectedAddressId}
+                          onChange={(e) => setSelectedAddressId(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-200 text-xs focus:ring-2 focus:ring-orange-500/50 outline-none cursor-pointer appearance-none transition-all"
+                        >
+                          {addresses.map((addr) => (
+                            <option key={addr._id} value={addr._id} className="bg-slate-950">
+                              {addr.address}, {addr.area} ({addr.city})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5 animate-fade-in">
+                        <input
+                          type="text"
+                          name="address"
+                          placeholder="Street Address / Door No."
+                          value={newAddress.address}
+                          onChange={handleNewAddressChange}
+                          className="w-full border border-slate-800 bg-slate-950 text-white placeholder-slate-600 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-orange-500 outline-none"
+                          required={showNewAddressForm}
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            name="area"
+                            placeholder="Area / Locality"
+                            value={newAddress.area}
+                            onChange={handleNewAddressChange}
+                            className="w-full border border-slate-800 bg-slate-950 text-white placeholder-slate-600 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-orange-500 outline-none"
+                            required={showNewAddressForm}
+                          />
+                          <input
+                            type="text"
+                            name="city"
+                            placeholder="City"
+                            value={newAddress.city}
+                            onChange={handleNewAddressChange}
+                            className="w-full border border-slate-800 bg-slate-950 text-white placeholder-slate-600 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-orange-500 outline-none"
+                            required={showNewAddressForm}
+                          />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              name="pin_code"
+                              placeholder="Pin Code"
+                              maxLength={6}
+                              value={newAddress.pin_code}
+                              onChange={(e) => handlePincodeChange(e.target.value)}
+                              className="w-full border border-slate-800 bg-slate-950 text-white placeholder-slate-600 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-orange-500 outline-none font-semibold text-orange-500"
+                              required={showNewAddressForm}
+                            />
+                            {pincodeLoading && (
+                              <Loader2 size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-orange-500" />
+                            )}
+                          </div>
+                          <input
+                            type="text"
+                            name="district"
+                            placeholder="District"
+                            value={newAddress.district}
+                            onChange={handleNewAddressChange}
+                            className="w-full border border-slate-800 bg-slate-950 text-white placeholder-slate-600 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-orange-500 outline-none"
+                            required={showNewAddressForm}
+                          />
+                          <div className="relative">
+                            <select
+                              required={showNewAddressForm}
+                              value={newAddress.state}
+                              onChange={(e) => setNewAddress(prev => ({ ...prev, state: e.target.value }))}
+                              className="w-full border border-slate-800 bg-slate-950 text-slate-200 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-orange-500 outline-none appearance-none cursor-pointer"
+                            >
+                              <option value="" disabled className="text-slate-600">State</option>
+                              {INDIAN_STATES.map((st) => (
+                                <option key={st} value={st} className="bg-slate-950 text-white">
+                                  {st}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 text-[10px]">▼</div>
+                          </div>
+                        </div>
+                        {addresses.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowNewAddressForm(false)}
+                            className="text-[10px] text-slate-500 hover:text-white transition-colors block text-right w-full mt-1 font-bold cursor-pointer"
+                          >
+                            Cancel & Select Saved
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-900 dark:bg-orange-600 hover:bg-blue-800 dark:hover:bg-orange-500 text-white py-3.5 rounded-xl transition-all font-bold text-sm shadow-md cursor-pointer flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  Raising Request…
-                </>
-              ) : (
-                "Submit Repair Request →"
-              )}
-            </button>
-          </form>
-        )}
+              {/* Submit Dispatch bar */}
+              <div className="pt-6 border-t border-slate-900 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-xl transition-all duration-200 font-bold text-sm shadow-lg shadow-orange-500/10 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5"
+                >
+                  {loading ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      Dispatching Request…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={16} className="animate-pulse" />
+                      Submit & Dispatch Pro Request →
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </form>
+          )}
+        </div>
+
+        {/* Footer info bar */}
+        <div className="border-t border-slate-900/60 py-4 px-8 text-center text-[10px] text-slate-500 bg-slate-950/40">
+          Secured system encryption. By submitting this request, you agree to dispatch background-verified technician services.
+        </div>
+
       </div>
+
     </section>
   );
 }

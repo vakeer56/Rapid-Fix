@@ -4,6 +4,15 @@ export interface AuthUser {
     _id: string;
     name: string;
     phone: string;
+    email?: string;
+    age?: number;
+    gender?: string;
+    experience?: number;
+    located_address?: string;
+    preferred_areas?: string[];
+    photo?: string;
+    verificationStatus?: boolean;
+    firebaseUid?: string;
 }
 
 export interface AuthContextType {

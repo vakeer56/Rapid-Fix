@@ -106,8 +106,13 @@ exports.resolveProblem = async (req, res) => {
 
 exports.getUserProblems = async (req, res) => {
     try {
-        const userId = req.user.sub;
-        const problems = await Problem.find({ userId }).populate('address').populate('assigned_worker');
+        const { sub, role } = req.user;
+        let problems = [];
+        if (role === "worker") {
+            problems = await Problem.find({ assigned_worker: sub }).populate('address');
+        } else {
+            problems = await Problem.find({ userId: sub }).populate('address').populate('assigned_worker');
+        }
         return res.json({ success: true, problems });
     } catch (err) {
         return res.status(500).json({ success: false, message: err.message });

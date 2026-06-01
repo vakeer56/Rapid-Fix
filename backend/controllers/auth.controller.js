@@ -1,5 +1,26 @@
 const User = require("../model/user.model");
 const Workers = require("../model/workers.model");
+const Worker = Workers;
+
+const uploadWorkerPhoto = async (photoBase64) => {
+    if (!photoBase64) return "";
+    if (photoBase64.startsWith("data:image")) {
+        try {
+            const cloudinary = require('../config/cloudinary.js');
+            const result = await cloudinary.uploader.upload(photoBase64, {
+                folder: "rapidfix_workers",
+                transformation: [
+                    { width: 400, height: 400, crop: "fill", gravity: "face" }
+                ]
+            });
+            return result.secure_url;
+        } catch (err) {
+            console.error("Cloudinary worker photo uploader error:", err);
+            return "";
+        }
+    }
+    return photoBase64; // already a URL
+};
 
 const {sendOtp, checkOtp } = require("../services/twilioVerify.service");
 
@@ -143,28 +164,35 @@ const completeProfileController = async(req, res) => {
         }
 
         if (role === "worker") {
-
             const {
                 name,
                 age,
                 experience,
                 preferred_areas,
                 located_address,
+                photo,
             } = req.body;
 
-            if (!name || !age || experience === undefined) {
+            if (!name || !age || experience === undefined || !located_address || !photo || !preferred_areas) {
                 return res.status(400).json({
                     success: false,
-                    message: "Missing required worker fields",
+                    message: "Missing required worker fields: name, age, experience, located_address, preferred_areas, and photo are compulsory.",
                 });
             }
 
+            const parsedAreas = Array.isArray(preferred_areas)
+                ? preferred_areas
+                : String(preferred_areas).split(",").map(a => a.trim()).filter(Boolean);
+
+            const uploadedPhotoUrl = await uploadWorkerPhoto(photo);
+
             account = await Worker.create({
                 name,
-                age,
-                experience,
-                preferred_areas,
+                age: Number(age),
+                experience: Number(experience),
+                preferred_areas: parsedAreas,
                 located_address,
+                photo: uploadedPhotoUrl,
                 phone,
                 authProvider: "twilio",
             });
@@ -237,13 +265,13 @@ const meController = async (req, res) => {
     }
 };
 
-// Authenticates a user via Firebase ID token, creating or finding them in MongoDB.
-// Body: { idToken, name?, age?, gender?, phone?, email? }
+// Authenticates a user or worker via Firebase ID token, creating or finding them in MongoDB.
+// Body: { idToken, name?, age?, gender?, phone?, email?, role? }
 // Returns: { success, needsProfile, token?, user?, firebaseUser? }
 const firebaseAuthController = async (req, res) => {
     try {
         const { verifyFirebaseToken } = require('../middleware/firebaseAdmin.middleware');
-        const { idToken, name, age, gender, phone, email: bodyEmail } = req.body;
+        const { idToken, name, age, gender, phone, email: bodyEmail, role = "user" } = req.body;
 
         if (!idToken) {
             return res.status(400).json({ success: false, message: 'idToken is required' });
@@ -260,61 +288,136 @@ const firebaseAuthController = async (req, res) => {
         const resolvedEmail = firebaseUser.email || bodyEmail;
         const resolvedName = firebaseUser.name || name;
 
-        // Find existing user by firebaseUid or email
-        let user = await User.findOne({
-            $or: [
-                { firebaseUid: firebaseUser.uid },
-                ...(resolvedEmail ? [{ email: resolvedEmail }] : [])
-            ]
-        });
+        // Robust collection selection & lookup logic:
+        // If a specific role is passed in the request body (e.g. at signup/login page select), use it.
+        // Otherwise (e.g. automatic refresh/onAuthStateChanged check), search both Worker and User.
+        let standardRole = role === "worker" ? "worker" : "user";
+        let account = null;
 
-        // Check if profile is complete: has name, age, gender, phone
-        const isProfileComplete = (u) => u && u.name && u.age && u.gender && u.phone;
-
-        // If all profile fields provided in body, upsert the user
-        if (name && age && gender && phone) {
-            if (user) {
-                // Update existing with firebase UID and any missing fields
-                user.firebaseUid = firebaseUser.uid;
-                user.authProvider = 'firebase';
-                if (!user.name) user.name = name;
-                if (!user.age) user.age = age;
-                if (!user.gender) user.gender = gender;
-                if (!user.phone) user.phone = phone;
-                if (!user.email && resolvedEmail) user.email = resolvedEmail;
-                await user.save();
+        if (role === "worker") {
+            account = await Worker.findOne({
+                $or: [
+                    { firebaseUid: firebaseUser.uid },
+                    ...(resolvedEmail ? [{ email: resolvedEmail }] : [])
+                ]
+            });
+        } else if (req.body.role === "user") {
+            account = await User.findOne({
+                $or: [
+                    { firebaseUid: firebaseUser.uid },
+                    ...(resolvedEmail ? [{ email: resolvedEmail }] : [])
+                ]
+            });
+        } else {
+            // No explicit role passed or default check: search both collections
+            account = await Worker.findOne({
+                $or: [
+                    { firebaseUid: firebaseUser.uid },
+                    ...(resolvedEmail ? [{ email: resolvedEmail }] : [])
+                ]
+            });
+            if (account) {
+                standardRole = "worker";
             } else {
-                // Create new user
-                user = await User.create({
-                    name,
-                    age,
-                    gender,
-                    phone,
-                    email: resolvedEmail || '',
-                    firebaseUid: firebaseUser.uid,
-                    authProvider: 'firebase',
+                account = await User.findOne({
+                    $or: [
+                        { firebaseUid: firebaseUser.uid },
+                        ...(resolvedEmail ? [{ email: resolvedEmail }] : [])
+                    ]
                 });
+                standardRole = "user";
             }
         }
 
-        // If user exists and profile is complete, issue token
-        if (user && isProfileComplete(user)) {
+        // Check if profile is complete
+        const isProfileComplete = (standardRole === "worker")
+            ? (w) => w && w.name && w.age && w.experience !== undefined && w.located_address && w.photo && w.preferred_areas?.length > 0 && w.phone
+            : (u) => u && u.name && u.age && u.gender && u.phone;
+
+        // If all profile fields provided in body, upsert the account
+        if (standardRole === "worker") {
+            const { experience, preferred_areas, located_address, photo } = req.body;
+            if (name && age && experience !== undefined && located_address && photo && preferred_areas && phone) {
+                const parsedAreas = Array.isArray(preferred_areas)
+                    ? preferred_areas
+                    : String(preferred_areas).split(",").map(a => a.trim()).filter(Boolean);
+
+                const uploadedPhotoUrl = await uploadWorkerPhoto(photo);
+
+                if (account) {
+                    account.firebaseUid = firebaseUser.uid;
+                    account.authProvider = 'firebase';
+                    if (!account.name) account.name = name;
+                    if (!account.age) account.age = Number(age);
+                    if (account.experience === undefined) account.experience = Number(experience);
+                    if (!account.located_address) account.located_address = located_address;
+                    account.photo = uploadedPhotoUrl || account.photo || photo;
+                    if (!account.preferred_areas || account.preferred_areas.length === 0) account.preferred_areas = parsedAreas;
+                    if (!account.phone) account.phone = phone;
+                    if (!account.email && resolvedEmail) account.email = resolvedEmail;
+                    await account.save();
+                } else {
+                    account = await Worker.create({
+                        name,
+                        age: Number(age),
+                        experience: Number(experience),
+                        located_address,
+                        photo: uploadedPhotoUrl,
+                        preferred_areas: parsedAreas,
+                        phone,
+                        email: resolvedEmail || '',
+                        firebaseUid: firebaseUser.uid,
+                        authProvider: 'firebase',
+                    });
+                }
+            }
+        } else {
+            // Customer logic
+            if (name && age && gender && phone) {
+                if (account) {
+                    account.firebaseUid = firebaseUser.uid;
+                    account.authProvider = 'firebase';
+                    if (!account.name) account.name = name;
+                    if (!account.age) account.age = age;
+                    if (!account.gender) account.gender = gender;
+                    if (!account.phone) account.phone = phone;
+                    if (!account.email && resolvedEmail) account.email = resolvedEmail;
+                    await account.save();
+                } else {
+                    account = await User.create({
+                        name,
+                        age,
+                        gender,
+                        phone,
+                        email: resolvedEmail || '',
+                        firebaseUid: firebaseUser.uid,
+                        authProvider: 'firebase',
+                    });
+                }
+            }
+        }
+
+        // If account exists and profile is complete, issue token
+        if (account && isProfileComplete(account)) {
             const token = generateAccessToken({
-                sub: user._id.toString(),
-                role: 'user',
-                phone: user.phone,
+                sub: account._id.toString(),
+                role: standardRole,
+                phone: account.phone,
             });
             return res.json({
                 success: true,
                 needsProfile: false,
                 token,
-                user,
+                user: {
+                    ...account.toObject(),
+                    role: standardRole,
+                },
             });
         }
 
         // Profile incomplete — return setup token and what we know from Firebase
         const setupToken = generateSetupToken({
-            role: 'user',
+            role: standardRole,
             firebaseUid: firebaseUser.uid,
             email: resolvedEmail,
             needsProfile: true,
@@ -333,66 +436,147 @@ const firebaseAuthController = async (req, res) => {
         });
     } catch (error) {
         console.error('[firebaseAuthController]', error);
-        return res.status(500).json({ success: false, message: 'Server error' });
+        if (error.code === 11000) {
+            const field = Object.keys(error.keyValue)[0] || 'email/phone';
+            return res.status(400).json({
+                success: false,
+                message: `An account with this ${field} already exists.`
+            });
+        }
+        return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
     }
 };
 
-// Completes a Firebase user profile after initial sign-in.
+// Completes a Firebase user or worker profile after initial sign-in.
 // Requires setupToken (from firebaseAuthController when needsProfile=true).
-// Body: { name, age, gender, phone }
+// Body: { name, age, phone, ...role-specific-fields }
 const firebaseCompleteProfileController = async (req, res) => {
     try {
-        const { firebaseUid, email } = req.user; // from requireSetupToken middleware
-        const { name, age, gender, phone } = req.body;
+        const { firebaseUid, email, role = "user" } = req.user; // from requireSetupToken middleware
+        const standardRole = role === "worker" ? "worker" : "user";
 
-        if (!name || !age || !gender || !phone) {
-            return res.status(400).json({ success: false, message: 'name, age, gender and phone are all required' });
-        }
+        if (standardRole === "worker") {
+            const { name, age, experience, located_address, preferred_areas, photo, phone } = req.body;
+            if (!name || !age || experience === undefined || !located_address || !photo || !preferred_areas || !phone) {
+                return res.status(400).json({ success: false, message: 'All worker fields are required: name, age, experience, located_address, preferred_areas, photo and phone are compulsory.' });
+            }
 
-        // Find or create the user
-        let user = await User.findOne({
-            $or: [
-                { firebaseUid },
-                ...(email ? [{ email }] : [])
-            ]
-        });
+            const parsedAreas = Array.isArray(preferred_areas)
+                ? preferred_areas
+                : String(preferred_areas).split(",").map(a => a.trim()).filter(Boolean);
 
-        if (user) {
-            user.firebaseUid = firebaseUid;
-            user.authProvider = 'firebase';
-            user.name = name;
-            user.age = age;
-            user.gender = gender;
-            user.phone = phone;
-            if (!user.email && email) user.email = email;
-            await user.save();
+            const uploadedPhotoUrl = await uploadWorkerPhoto(photo);
+
+            let account = await Worker.findOne({
+                $or: [
+                    { firebaseUid },
+                    ...(email ? [{ email }] : [])
+                ]
+            });
+
+            if (account) {
+                account.firebaseUid = firebaseUid;
+                account.authProvider = 'firebase';
+                account.name = name;
+                account.age = Number(age);
+                account.experience = Number(experience);
+                account.located_address = located_address;
+                account.photo = uploadedPhotoUrl || account.photo || photo;
+                account.preferred_areas = parsedAreas;
+                account.phone = phone;
+                if (!account.email && email) account.email = email;
+                await account.save();
+            } else {
+                account = await Worker.create({
+                    name,
+                    age: Number(age),
+                    experience: Number(experience),
+                    located_address,
+                    photo: uploadedPhotoUrl,
+                    preferred_areas: parsedAreas,
+                    phone,
+                    email: email || '',
+                    firebaseUid,
+                    authProvider: 'firebase',
+                });
+            }
+
+            const token = generateAccessToken({
+                sub: account._id.toString(),
+                role: 'worker',
+                phone: account.phone,
+            });
+
+            return res.status(201).json({
+                success: true,
+                needsProfile: false,
+                token,
+                user: {
+                    ...account.toObject(),
+                    role: 'worker',
+                },
+            });
         } else {
-            user = await User.create({
-                name,
-                age,
-                gender,
-                phone,
-                email: email || '',
-                firebaseUid,
-                authProvider: 'firebase',
+            const { name, age, gender, phone } = req.body;
+
+            if (!name || !age || !gender || !phone) {
+                return res.status(400).json({ success: false, message: 'name, age, gender and phone are all required' });
+            }
+
+            let user = await User.findOne({
+                $or: [
+                    { firebaseUid },
+                    ...(email ? [{ email }] : [])
+                ]
+            });
+
+            if (user) {
+                user.firebaseUid = firebaseUid;
+                user.authProvider = 'firebase';
+                user.name = name;
+                user.age = age;
+                user.gender = gender;
+                user.phone = phone;
+                if (!user.email && email) user.email = email;
+                await user.save();
+            } else {
+                user = await User.create({
+                    name,
+                    age,
+                    gender,
+                    phone,
+                    email: email || '',
+                    firebaseUid,
+                    authProvider: 'firebase',
+                });
+            }
+
+            const token = generateAccessToken({
+                sub: user._id.toString(),
+                role: 'user',
+                phone: user.phone,
+            });
+
+            return res.status(201).json({
+                success: true,
+                needsProfile: false,
+                token,
+                user: {
+                    ...user.toObject(),
+                    role: 'user',
+                },
             });
         }
-
-        const token = generateAccessToken({
-            sub: user._id.toString(),
-            role: 'user',
-            phone: user.phone,
-        });
-
-        return res.status(201).json({
-            success: true,
-            needsProfile: false,
-            token,
-            user,
-        });
     } catch (error) {
         console.error('[firebaseCompleteProfileController]', error);
-        return res.status(500).json({ success: false, message: 'Server error' });
+        if (error.code === 11000) {
+            const field = Object.keys(error.keyValue)[0] || 'email/phone';
+            return res.status(400).json({
+                success: false,
+                message: `An account with this ${field} already exists.`
+            });
+        }
+        return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
     }
 };
 
@@ -454,7 +638,7 @@ const syncAdminConfigController = async (req, res) => {
         const dotenv = require('dotenv');
         const mongoose = require('mongoose');
 
-        const { mongo, firebase } = req.body;
+        const { mongo, firebase, cloudinary } = req.body;
 
         if (!mongo || !firebase) {
             return res.status(400).json({ success: false, message: 'mongo and firebase parameters are required' });
@@ -478,6 +662,11 @@ VITE_FIREBASE_STORAGE_BUCKET=${firebase.storageBucket || ""}
 VITE_FIREBASE_MESSAGING_SENDER_ID=${firebase.messagingSenderId || ""}
 VITE_FIREBASE_APP_ID=${firebase.appId || ""}
 VITE_FIREBASE_MESAURE_ID=${firebase.measurementId || ""}
+
+# Cloudinary Storage Configuration
+CLOUD_NAME=${cloudinary?.cloudName || ""}
+CLOUD_API_KEY=${cloudinary?.apiKey || ""}
+CLOUD_API_SECRET=${cloudinary?.apiSecret || ""}
 `;
 
         // Paths to save
@@ -508,12 +697,45 @@ VITE_FIREBASE_MESAURE_ID=${firebase.measurementId || ""}
             if (mongoose.connection.readyState !== 0) {
                 await mongoose.disconnect();
             }
-            await mongoose.connect(process.env.MONGODB_URL);
-            dbStatus = "Connected successfully";
-            console.log("[DATABASE] Dynamically re-connected to MongoDB URI.");
+            
+            let dbUri = process.env.MONGODB_URL;
+            const dbName = process.env.MONGODB_DB_NAME || "rapid_fix_db";
+            
+            if (dbUri) {
+                const urlWithoutProtocol = dbUri.replace(/^mongodb(\+srv)?:\/\//, "");
+                const hasPath = urlWithoutProtocol.includes("/");
+                if (!hasPath) {
+                    dbUri = `${dbUri.replace(/\/$/, "")}/${dbName}`;
+                } else {
+                    const pathParts = urlWithoutProtocol.split("/");
+                    const dbPart = pathParts[1] ? pathParts[1].split("?")[0] : "";
+                    if (!dbPart) {
+                        dbUri = dbUri.replace(/\/?(\?.*)?$/, `/${dbName}$1`);
+                    }
+                }
+            } else {
+                dbUri = `mongodb://localhost:27017/${dbName}`;
+            }
+
+            await mongoose.connect(dbUri);
+            dbStatus = `Connected successfully to database: "${mongoose.connection.name}"`;
+            console.log(`[DATABASE] Dynamically re-connected to database: "${mongoose.connection.name}"`);
         } catch (dbErr) {
             dbStatus = "Failed to connect: " + dbErr.message;
             console.error("[DATABASE] Dynamic re-connection error:", dbErr.message);
+        }
+
+        // Dynamic hot-reload of Cloudinary configuration
+        try {
+            const cloudinarySDK = require('../config/cloudinary.js');
+            cloudinarySDK.config({
+                cloud_name: process.env.CLOUD_NAME,
+                api_key: process.env.CLOUD_API_KEY,
+                api_secret: process.env.CLOUD_API_SECRET
+            });
+            console.log("[CLOUDINARY] Dynamically re-configured Cloudinary SDK credentials.");
+        } catch (cloudErr) {
+            console.error("[CLOUDINARY] Dynamic re-configuration warning:", cloudErr.message);
         }
 
         return res.json({

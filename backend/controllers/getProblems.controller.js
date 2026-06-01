@@ -21,18 +21,41 @@ const getAllProblems = async (req, res) => {
         if(!locatedAddressId){
             return res.status(404).json({message: "Worker has no located address"});
         }
-        const retrievedAddress = await addressModel.findOne({ address: locatedAddressId });
-        if(!retrievedAddress){
-            return res.status(404).json({message: "Worker's located address not found in database"});
-        }
-        const district = retrievedAddress.district;
         
+        let district = "";
+        const parts = locatedAddressId.split(",");
+        if (parts.length >= 2) {
+            district = parts[1].trim();
+        } else {
+            const retrievedAddress = await addressModel.findOne({ address: locatedAddressId });
+            if (retrievedAddress) {
+                district = retrievedAddress.district;
+            } else {
+                district = locatedAddressId.trim();
+            }
+        }
+        
+        // Helper to escape regular expression special characters
+        const escapeRegExp = (string) => {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        };
+
+        const escapedDistrict = escapeRegExp(district.trim());
+        const districtRegex = new RegExp(`^${escapedDistrict}$`, 'i');
+        
+        const areaRegexes = preferred_areas.map(area => {
+            const escapedArea = escapeRegExp(area.trim());
+            return new RegExp(`^${escapedArea}$`, 'i');
+        });
+
         // Convert the string ID to a MongoDB ObjectId so the aggregate query matches properly
         const workerObjectId = new mongoose.Types.ObjectId(workerId);
         
         const problems = await problemModel.aggregate([
         {
             $match: {
+            status: "pending",
+            assigned_worker: null,
             rejected_workers: { $nin: [workerObjectId] }
             }
         },
@@ -47,8 +70,11 @@ const getAllProblems = async (req, res) => {
         { $unwind: "$address" },
         {
             $match: {
-            "address.area": { $in: preferred_areas },
-            "address.district": district
+            $or: [
+                { "address.area": { $in: areaRegexes } },
+                { "address.city": { $in: areaRegexes } }
+            ],
+            "address.district": districtRegex
             }
         }
         ]);

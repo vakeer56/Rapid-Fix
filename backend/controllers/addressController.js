@@ -156,4 +156,32 @@ const updateAddressState = async (req, res) => {
     }
 }
 
-module.exports = {addAddress, getAddress, deleteAddress, getAddressesByUser, updateAddressAddress, updateAddressPinCode, updateAddressDistrict, updateAddressCity, updateAddressArea, updateAddressState};
+const getPincodeDetails = async (req, res) => {
+    try {
+        const { pincode } = req.params;
+        if (!pincode || pincode.length !== 6) {
+            return res.status(400).json({ message: "Invalid pincode format" });
+        }
+        
+        // Temporarily ignore expired SSL certificate
+        const originalTlsReject = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+        
+        const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+        const data = await response.json();
+        
+        // Restore SSL security check
+        if (originalTlsReject !== undefined) {
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalTlsReject;
+        } else {
+            delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        }
+        
+        return res.status(200).json(data);
+    } catch (error) {
+        console.error("Error fetching pincode details on backend:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+module.exports = {addAddress, getAddress, deleteAddress, getAddressesByUser, updateAddressAddress, updateAddressPinCode, updateAddressDistrict, updateAddressCity, updateAddressArea, updateAddressState, getPincodeDetails};
