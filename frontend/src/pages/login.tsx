@@ -134,9 +134,9 @@ export const Login = () => {
 
   return (
     <>
-      <div className="min-h-screen flex overflow-hidden bg-slate-950 font-sans">
+      <div className="min-h-screen flex overflow-hidden bg-transparent font-sans">
         {/* ── Left Branding Panel (Swapped & narrower for elegant, static presentation) ── */}
-        <div className="hidden lg:flex lg:w-1/2 xl:w-[45%] relative bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex-col items-center justify-between p-12 overflow-hidden order-1 lg:order-1 animate-slide-left border-r border-slate-900/50">
+        <div className="hidden lg:flex lg:w-1/2 xl:w-[45%] relative bg-slate-950/20 backdrop-blur-md flex-col items-center justify-between p-12 overflow-hidden order-1 lg:order-1 animate-slide-left border-r border-slate-900/50">
           <Shapes />
 
           {/* Logo Centered */}
@@ -181,9 +181,9 @@ export const Login = () => {
         </div>
 
         {/* ── Right Auth Panel (Swapped, wider, py-16 padding & justify-start to ensure top form is never cut off!) ── */}
-        <div className="w-full lg:w-1/2 xl:w-[55%] h-screen overflow-y-auto flex flex-col items-center justify-start py-16 px-6 sm:px-12 order-2 lg:order-2 animate-slide-right bg-slate-950 scrollbar-thin">
+        <div className="w-full lg:w-1/2 xl:w-[55%] h-screen overflow-y-auto flex flex-col items-center justify-start py-16 px-6 sm:px-12 order-2 lg:order-2 animate-slide-right bg-transparent scrollbar-thin">
           {/* Frosted Glass Form Card Container to Anchor Elements - Sized beautifully at max-w-md! */}
-          <div className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 sm:p-10 shadow-2xl shadow-black/50 my-4">
+          <div className="w-full max-w-md glass-panel rounded-3xl p-8 sm:p-10 shadow-2xl shadow-black/50 my-4">
             {/* Mobile Header Logo */}
             <div className="lg:hidden flex justify-center mb-8">
               <Link to="/" className="transition-transform duration-200 hover:scale-105">

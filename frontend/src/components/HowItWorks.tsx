@@ -30,7 +30,7 @@ const HowItWorks = () => {
   return (
     <section
       id="how-it-works"
-      className="w-full py-24 px-6 md:px-16 bg-white dark:bg-slate-950 transition-colors duration-300"
+      className="w-full py-24 px-6 md:px-16 bg-transparent transition-colors duration-300"
     >
       <div className="max-w-7xl mx-auto">
 
@@ -60,11 +60,11 @@ const HowItWorks = () => {
           {STEPS.map((step, index) => (
             <div
               key={index}
-              className="relative bg-gray-50 dark:bg-slate-900/40 border border-gray-100 dark:border-slate-800/80 rounded-3xl p-8 shadow-sm hover:shadow-xl dark:hover:shadow-indigo-950/10 transition-all duration-300 group"
+              className="relative glass-panel rounded-3xl p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group"
             >
 
               {/* STEP NUMBER */}
-              <div className="absolute top-6 right-6 text-5xl font-bold text-gray-200 dark:text-slate-800/60 transition-colors duration-300">
+              <div className="absolute top-6 right-6 text-5xl font-bold text-gray-200 dark:text-slate-800/40 transition-colors duration-300">
                 0{index + 1}
               </div>
 
@@ -86,7 +86,7 @@ const HowItWorks = () => {
 
               {/* ARROW */}
               {index !== STEPS.length - 1 && (
-                <div className="hidden md:flex absolute -right-5 top-1/2 -translate-y-1/2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 w-10 h-10 rounded-full items-center justify-center shadow-md">
+                <div className="hidden md:flex absolute -right-5 top-1/2 -translate-y-1/2 glass-panel w-10 h-10 rounded-full items-center justify-center shadow-md">
                   <ArrowRight size={18} className="text-blue-500 dark:text-blue-400" />
                 </div>
               )}

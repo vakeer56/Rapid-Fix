@@ -3,12 +3,12 @@ import { ArrowRight, Wrench } from "lucide-react";
 
 const Hero = () => {
   return (
-    <section className="w-full min-h-screen flex items-center justify-center px-6 md:px-16 bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
+    <section className="w-full min-h-screen flex items-center justify-center px-6 md:px-16 bg-transparent transition-colors duration-300">
       <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center pt-24 md:pt-16">
         {/* Left Content */}
         <div className="space-y-8">
             {/* Badge */}
-          <div className="flex items-center gap-2 bg-orange-100 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 px-4 py-2 rounded-full w-fit text-sm font-medium">
+          <div className="flex items-center gap-2 bg-orange-100/60 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 px-4 py-2 rounded-full w-fit text-sm font-medium border border-orange-200/30 dark:border-orange-500/10 backdrop-blur-sm">
             <Wrench size={16} />
             Fast local repair assistance
           </div>
@@ -34,7 +34,7 @@ const Hero = () => {
               <ArrowRight size={18} />
             </Link>
 
-            <button className="border border-gray-300 dark:border-slate-700 hover:border-blue-900 dark:hover:border-orange-500 hover:text-blue-900 dark:hover:text-orange-400 transition-all duration-300 px-6 py-3 rounded-4xl font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+            <button className="border border-gray-300 dark:border-slate-700 hover:border-blue-900 dark:hover:border-orange-500 hover:text-blue-900 dark:hover:text-orange-400 bg-white/20 dark:bg-slate-900/10 backdrop-blur-sm transition-all duration-300 px-6 py-3 rounded-4xl font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
               Become a Worker
             </button>
           </div>
@@ -43,7 +43,7 @@ const Hero = () => {
         {/* Right content */}
         <div className="flex justify-center">
 
-          <div className="relative w-[300px] h-[300px] sm:w-[350px] sm:h-[350px] md:w-[450px] md:h-[450px] bg-orange-100 dark:bg-slate-800/80 rounded-[40px] flex items-center justify-center shadow-xl transition-all duration-300">
+          <div className="relative w-[300px] h-[300px] sm:w-[350px] sm:h-[350px] md:w-[450px] md:h-[450px] bg-orange-100/40 dark:bg-slate-800/30 backdrop-blur-sm rounded-[40px] flex items-center justify-center shadow-xl border border-white/20 dark:border-slate-800/20 transition-all duration-300">
 
             <img
               src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1200&auto=format&fit=crop"
@@ -52,7 +52,7 @@ const Hero = () => {
             />
 
             {/* Floating Card */}
-            <div className="absolute bottom-6 left-6 bg-white dark:bg-slate-950 px-5 py-4 rounded-2xl shadow-lg border border-transparent dark:border-slate-800/50 transition-colors duration-300">
+            <div className="absolute bottom-6 left-6 glass-panel px-5 py-4 rounded-2xl transition-colors duration-300">
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 Active Workers Nearby
               </p>

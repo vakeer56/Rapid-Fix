@@ -84,7 +84,7 @@ const CommonIssuesGrid = () => {
   };
 
   return (
-    <section className="w-full pt-24 pb-0 px-6 md:px-16 bg-white dark:bg-slate-950 transition-colors duration-300">
+    <section className="w-full pt-24 pb-0 px-6 md:px-16 bg-transparent transition-colors duration-300">
       
       <div className="max-w-7xl mx-auto">
 
@@ -112,7 +112,7 @@ const CommonIssuesGrid = () => {
           {issues.map((issue, index) => (
             <div
               key={index}
-              className="group bg-gray-50 dark:bg-slate-900/40 hover:bg-blue-50 dark:hover:bg-slate-900/80 border border-gray-200 dark:border-slate-800/80 hover:border-blue-200 dark:hover:border-blue-900/40 rounded-3xl p-8 transition-all duration-300 shadow-sm hover:shadow-xl dark:hover:shadow-indigo-950/10 cursor-pointer flex flex-col justify-between h-[450px]"
+              className="group glass-panel rounded-3xl p-8 transition-all duration-300 shadow-sm hover:shadow-xl hover:-translate-y-1 cursor-pointer flex flex-col justify-between h-[450px]"
             >
               <div>
                 <img src={issue.image} alt={issue.title}  className=" w-full h-56 object-cover rounded-2xl mb-6"/> 

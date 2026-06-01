@@ -470,13 +470,13 @@ export default function Dashboard() {
   // ─── Service Partner Dashboard Panel ───
   if (appUser.role === "worker") {
     return (
-      <div className="min-h-screen flex flex-col bg-slate-950 text-white font-sans transition-colors duration-300">
+      <div className="min-h-screen flex flex-col bg-transparent text-white font-sans transition-colors duration-300">
         <Navbar />
 
         <main className="flex-grow pt-28 pb-16 px-6 md:px-12 max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-8">
           {/* Left Panel: Worker Profile and Stats Card */}
           <div className="w-full lg:w-1/3 shrink-0 flex flex-col gap-6">
-            <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+            <div className="glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
               {/* Background ambient lighting */}
               <div className="absolute -right-16 -top-16 w-36 h-36 bg-orange-600/10 rounded-full blur-2xl pointer-events-none" />
               
@@ -561,7 +561,7 @@ export default function Dashboard() {
           {/* Right Panel: Tabs, Feeds and Task Center */}
           <div className="w-full lg:w-2/3 flex flex-col gap-6">
             {/* Sliding Pill Tab Switcher */}
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-1.5 flex shadow-xl relative z-10 select-none">
+            <div className="glass-panel rounded-2xl p-1.5 flex shadow-xl relative z-10 select-none">
               <div 
                 className="absolute top-1.5 bottom-1.5 bg-orange-600 rounded-xl transition-all duration-300"
                 style={{
@@ -619,7 +619,7 @@ export default function Dashboard() {
                   </div>
                 ) : availableJobs.length === 0 ? (
                   /* Premium Empty State */
-                  <div className="bg-slate-900/40 rounded-3xl p-12 text-center border border-slate-850 shadow-xl max-w-xl mx-auto flex flex-col items-center">
+                  <div className="glass-panel rounded-3xl p-12 text-center shadow-xl max-w-xl mx-auto flex flex-col items-center">
                     <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mb-5">
                       <Zap className="w-7 h-7 text-slate-500" />
                     </div>
@@ -640,7 +640,7 @@ export default function Dashboard() {
                     {availableJobs.map((job) => (
                       <div 
                         key={job._id}
-                        className="bg-slate-900/40 rounded-3xl border border-slate-800/80 hover:border-orange-500/40 transition-all duration-300 p-6 flex flex-col justify-between hover:shadow-xl hover:shadow-orange-500/[0.02]"
+                        className="group glass-panel rounded-3xl hover:border-orange-500/40 transition-all duration-300 p-6 flex flex-col justify-between hover:shadow-xl hover:shadow-orange-500/[0.02] hover:-translate-y-0.5"
                       >
                         <div>
                           <div className="flex items-start justify-between gap-4 mb-3">
@@ -775,7 +775,7 @@ export default function Dashboard() {
                   </div>
                 ) : activeAssignments.length === 0 ? (
                   /* Elegant Empty State */
-                  <div className="bg-slate-900/40 rounded-3xl p-12 text-center border border-slate-850 shadow-xl max-w-xl mx-auto flex flex-col items-center">
+                  <div className="glass-panel rounded-3xl p-12 text-center shadow-xl max-w-xl mx-auto flex flex-col items-center">
                     <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mb-5">
                       <Wrench className="w-7 h-7 text-slate-500" />
                     </div>
@@ -796,8 +796,8 @@ export default function Dashboard() {
                     {activeAssignments.map((assignment) => (
                       <div 
                         key={assignment._id}
-                        className={`bg-slate-900/40 rounded-3xl border transition-all duration-300 p-6 flex flex-col sm:flex-row justify-between gap-6 hover:shadow-xl ${
-                          assignment.urgency ? "border-red-500/20" : "border-slate-800/80"
+                        className={`glass-panel rounded-3xl transition-all duration-300 p-6 flex flex-col sm:flex-row justify-between gap-6 hover:shadow-xl hover:-translate-y-0.5 ${
+                          assignment.urgency ? "border-red-500/20" : ""
                         }`}
                       >
                         <div className="flex-grow space-y-4">
@@ -958,7 +958,7 @@ export default function Dashboard() {
         {/* Worker Payout Modal */}
         {completingProblemId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative overflow-hidden animate-scale-up">
+            <div className="glass-panel rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative overflow-hidden animate-scale-up">
               {/* Glow decoration */}
               <div className="absolute -right-16 -top-16 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -1030,12 +1030,12 @@ export default function Dashboard() {
   // ─── Customer Dashboard Panel ───
   if (appUser.role === "user" || appUser.role === "admin") {
     return (
-      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
+      <div className="min-h-screen flex flex-col bg-transparent text-slate-900 dark:text-white transition-colors duration-300">
       <Navbar />
 
       <main className="flex-grow pt-28 pb-16 px-6 md:px-16 max-w-7xl mx-auto w-full">
         {/* Welcome Hero Banner */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 mb-8 text-white shadow-xl shadow-blue-900/10">
+        <div className="relative overflow-hidden glass-panel rounded-3xl p-6 sm:p-8 mb-8 text-white shadow-xl shadow-blue-900/10">
           <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
             <div>
@@ -1084,7 +1084,7 @@ export default function Dashboard() {
             </div>
           ) : requests.length === 0 ? (
             /* Elegant Empty State */
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800 shadow-sm max-w-xl mx-auto flex flex-col items-center">
+            <div className="glass-panel rounded-3xl p-12 text-center shadow-sm max-w-xl mx-auto flex flex-col items-center">
               <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-slate-800 flex items-center justify-center mb-6">
                 <Wrench className="w-8 h-8 text-blue-600 dark:text-orange-500" />
               </div>
@@ -1105,7 +1105,7 @@ export default function Dashboard() {
               {requests.map((req) => (
                 <div 
                   key={req._id}
-                  className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-200 p-6 flex flex-col justify-between"
+                  className="glass-panel rounded-3xl shadow-sm hover:shadow-md transition-all duration-200 p-6 flex flex-col justify-between hover:-translate-y-0.5"
                 >
                   <div>
                     {/* Header */}
@@ -1317,7 +1317,7 @@ export default function Dashboard() {
       {/* Rate & Review Modal */}
       {reviewingProblem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative animate-scale-up">
+          <div className="glass-panel rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative animate-scale-up">
             {/* Close Button */}
             <button
               onClick={() => {
@@ -1407,7 +1407,7 @@ export default function Dashboard() {
       {/* Worker Payout Modal */}
       {false && completingProblemId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative overflow-hidden animate-scale-up">
+          <div className="glass-panel rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative overflow-hidden animate-scale-up">
             {/* Glow decoration */}
             <div className="absolute -right-16 -top-16 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -1477,7 +1477,7 @@ export default function Dashboard() {
       {viewingWorkerReviews && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={() => setViewingWorkerReviews(null)} />
-          <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+          <div className="relative w-full max-w-md glass-panel rounded-3xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
             {/* Header */}
             <div className="p-5 border-b border-slate-800 flex justify-between items-center shrink-0">
               <div>

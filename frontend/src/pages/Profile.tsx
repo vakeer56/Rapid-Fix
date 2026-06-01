@@ -409,7 +409,7 @@ export default function Profile() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
+    <div className="min-h-screen flex flex-col bg-transparent text-slate-900 dark:text-white transition-colors duration-300">
       <Navbar />
 
       <main className="flex-grow pt-28 pb-16 px-6 md:px-16 max-w-4xl mx-auto w-full">
@@ -425,7 +425,7 @@ export default function Profile() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Left panel: Info summary */}
           <div className="md:col-span-1 space-y-6">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 text-center shadow-sm">
+            <div className="glass-panel rounded-3xl p-6 text-center shadow-sm">
               <div className="relative w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-blue-500/25 overflow-hidden shrink-0 group">
                 {photoPreview ? (
                   <img src={photoPreview} alt={form.name} className="w-full h-full object-cover" />
@@ -479,7 +479,7 @@ export default function Profile() {
             )}
 
             {/* Profile editing card */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-sm">
+            <div className="glass-panel rounded-3xl p-6 sm:p-8 shadow-sm">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
                 <User size={18} className="text-blue-500" />
                 Personal Details
@@ -703,7 +703,7 @@ export default function Profile() {
             </div>
 
             {/* Saved Addresses Card */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-sm">
+            <div className="glass-panel rounded-3xl p-6 sm:p-8 shadow-sm">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-500">
@@ -897,7 +897,7 @@ export default function Profile() {
             </div>
 
             {/* Password security card (only useful if using Firebase Auth) */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-sm">
+            <div className="glass-panel rounded-3xl p-6 sm:p-8 shadow-sm">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
                 <Key size={18} className="text-orange-500" />
                 Security & Passwords

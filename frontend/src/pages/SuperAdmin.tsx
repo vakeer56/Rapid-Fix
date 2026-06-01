@@ -273,7 +273,7 @@ CLOUD_API_SECRET=${cloudinary.apiSecret}
 
   if (!isAdminAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4 relative overflow-hidden font-sans">
+      <div className="min-h-screen bg-transparent text-white flex items-center justify-center p-4 relative overflow-hidden font-sans">
         {/* Dynamic Glowing Ambient Circles */}
         <div className="absolute top-1/4 left-1/4 w-[350px] h-[350px] bg-blue-600/15 rounded-full blur-3xl animate-pulse-glow pointer-events-none"></div>
         <div className="absolute bottom-1/4 right-1/4 w-[350px] h-[350px] bg-orange-600/10 rounded-full blur-3xl animate-pulse-glow pointer-events-none"></div>
@@ -287,7 +287,7 @@ CLOUD_API_SECRET=${cloudinary.apiSecret}
         </Link>
 
         <div className="w-full max-w-md relative z-10 animate-slide-up">
-          <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl shadow-black/50">
+          <div className="glass-panel rounded-3xl p-8 shadow-2xl shadow-black/50">
             {/* Header */}
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-500 mb-4 border border-orange-500/20">
@@ -353,7 +353,7 @@ CLOUD_API_SECRET=${cloudinary.apiSecret}
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-200 transition-colors duration-300 relative overflow-hidden flex flex-col font-sans">
+    <div className="min-h-screen bg-transparent text-gray-800 dark:text-gray-200 transition-colors duration-300 relative overflow-hidden flex flex-col font-sans">
       
       {/* Dynamic Ambient Background Gradients */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-100/40 dark:bg-blue-950/10 rounded-full blur-3xl -z-10 pointer-events-none"></div>
