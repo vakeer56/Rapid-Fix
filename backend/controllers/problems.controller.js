@@ -61,7 +61,7 @@ exports.createProblem = async (req, res) => {
         await newProblem.save();
 
         // Emit Socket event to notify workers of a new request
-        const io = req.app.get('socketio');
+        const io = req.app?.get('socketio');
         if (io) {
             io.emit('newProblem', newProblem);
         }
@@ -110,7 +110,7 @@ exports.resolveProblem = async (req, res) => {
         await problem.save();
 
         // Emit Socket event to notify customer that the request is resolved
-        const io = req.app.get('socketio');
+        const io = req.app?.get('socketio');
         if (io) {
             io.emit('problemResolved', { problemId });
         }
