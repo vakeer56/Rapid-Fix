@@ -921,6 +921,8 @@ CLOUD_API_SECRET=${cloudinary?.apiSecret || ""}
         console.error('[syncAdminConfigController]', error);
         return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
     }
+};
+
 // Permanently deletes a user or worker account, along with all associated problems/addresses,
 // preserving only ratings/reviews.
 // Requires confirmation of matching role@name in request body.
