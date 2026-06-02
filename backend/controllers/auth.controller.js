@@ -215,6 +215,7 @@ const completeProfileController = async(req, res) => {
             const {
                 name,
                 age,
+                gender,
                 experience,
                 preferred_areas,
                 located_address,
@@ -222,10 +223,10 @@ const completeProfileController = async(req, res) => {
                 categories,
             } = req.body;
 
-            if (!name || !age || experience === undefined || !located_address || !photo || !preferred_areas || !categories) {
+            if (!name || !age || !gender || experience === undefined || !located_address || !photo || !preferred_areas || !categories) {
                 return res.status(400).json({
                     success: false,
-                    message: "Missing required worker fields: name, age, experience, located_address, preferred_areas, photo, and categories are compulsory.",
+                    message: "Missing required worker fields: name, age, gender, experience, located_address, preferred_areas, photo, and categories are compulsory.",
                 });
             }
 
@@ -251,6 +252,7 @@ const completeProfileController = async(req, res) => {
             account = await Worker.create({
                 name,
                 age: Number(age),
+                gender,
                 experience: Number(experience),
                 preferred_areas: parsedAreas,
                 located_address,
@@ -423,13 +425,13 @@ const firebaseAuthController = async (req, res) => {
 
         // Check if profile is complete
         const isProfileComplete = (standardRole === "worker")
-            ? (w) => w && w.name && w.age && w.experience !== undefined && w.located_address && w.photo && w.preferred_areas?.length > 0 && w.categories?.length > 0 && w.phone
+            ? (w) => w && w.name && w.age && w.gender && w.experience !== undefined && w.located_address && w.photo && w.preferred_areas?.length > 0 && w.categories?.length > 0 && w.phone
             : (u) => u && u.name && u.age && u.gender && u.phone;
 
         // If all profile fields provided in body, upsert the account
         if (standardRole === "worker") {
-            const { experience, preferred_areas, located_address, photo, categories } = req.body;
-            if (name && age && experience !== undefined && located_address && photo && preferred_areas && phone && categories) {
+            const { gender, experience, preferred_areas, located_address, photo, categories } = req.body;
+            if (name && age && gender && experience !== undefined && located_address && photo && preferred_areas && phone && categories) {
                 const parsedAreas = Array.isArray(preferred_areas)
                     ? preferred_areas
                     : String(preferred_areas).split(",").map(a => a.trim()).filter(Boolean);
@@ -447,6 +449,7 @@ const firebaseAuthController = async (req, res) => {
                     account.authProvider = 'firebase';
                     if (!account.name) account.name = name;
                     if (!account.age) account.age = Number(age);
+                    if (!account.gender) account.gender = gender;
                     if (account.experience === undefined) account.experience = Number(experience);
                     if (!account.located_address) account.located_address = located_address;
                     account.photo = uploadedPhotoUrl || account.photo || photo;
@@ -459,6 +462,7 @@ const firebaseAuthController = async (req, res) => {
                     account = await Worker.create({
                         name,
                         age: Number(age),
+                        gender,
                         experience: Number(experience),
                         located_address,
                         photo: uploadedPhotoUrl,
@@ -563,9 +567,9 @@ const firebaseCompleteProfileController = async (req, res) => {
         const standardRole = role === "worker" ? "worker" : "user";
 
         if (standardRole === "worker") {
-            const { name, age, experience, located_address, preferred_areas, photo, phone, categories } = req.body;
-            if (!name || !age || experience === undefined || !located_address || !photo || !preferred_areas || !phone || !categories) {
-                return res.status(400).json({ success: false, message: 'All worker fields are required: name, age, experience, located_address, preferred_areas, photo, phone and categories are compulsory.' });
+            const { name, age, gender, experience, located_address, preferred_areas, photo, phone, categories } = req.body;
+            if (!name || !age || !gender || experience === undefined || !located_address || !photo || !preferred_areas || !phone || !categories) {
+                return res.status(400).json({ success: false, message: 'All worker fields are required: name, age, gender, experience, located_address, preferred_areas, photo, phone and categories are compulsory.' });
             }
 
             const parsedAreas = Array.isArray(preferred_areas)
@@ -596,6 +600,7 @@ const firebaseCompleteProfileController = async (req, res) => {
                 account.authProvider = 'firebase';
                 account.name = name;
                 account.age = Number(age);
+                account.gender = gender;
                 account.experience = Number(experience);
                 account.located_address = located_address;
                 account.photo = uploadedPhotoUrl || account.photo || photo;
@@ -608,6 +613,7 @@ const firebaseCompleteProfileController = async (req, res) => {
                 account = await Worker.create({
                     name,
                     age: Number(age),
+                    gender,
                     experience: Number(experience),
                     located_address,
                     photo: uploadedPhotoUrl,
@@ -714,6 +720,7 @@ const updateProfileController = async (req, res) => {
 
             if (name !== undefined) worker.name = name;
             if (age !== undefined) worker.age = Number(age);
+            if (gender !== undefined) worker.gender = gender;
             if (phone !== undefined) worker.phone = phone;
             if (email !== undefined) worker.email = email;
             if (experience !== undefined) worker.experience = Number(experience);

@@ -11,6 +11,11 @@ const workersSchema = new mongoose.Schema(
             type: Number,
             required: true
         },
+        gender: {
+            type: String,
+            required: true,
+            enum: ["male", "female", "other"]
+        },
         experience: {
             type: Number,
             required: true

@@ -116,8 +116,8 @@ export const ProfileCompletionModal = ({ isOpen, onClose, prefillName, prefillEm
 
     if (role === "worker") {
       const validPreferredAreas = preferredAreas.map(a => a.trim()).filter(Boolean);
-      if (!form.name || !form.age || !form.phone || !form.experience || !form.located_address || validPreferredAreas.length === 0 || !form.photo) {
-        setError("Please fill in all fields, provide at least one preferred location, and select a compulsory profile photo.");
+      if (!form.name || !form.age || !form.gender || !form.phone || !form.experience || !form.located_address || validPreferredAreas.length === 0 || !form.photo) {
+        setError("Please fill in all fields, select a gender, provide at least one preferred location, and select a compulsory profile photo.");
         return;
       }
       if (selectedCategories.length === 0) {
@@ -141,6 +141,7 @@ export const ProfileCompletionModal = ({ isOpen, onClose, prefillName, prefillEm
       const payload = role === "worker" ? {
         name: form.name,
         age: Number(form.age),
+        gender: form.gender,
         experience: Number(form.experience),
         located_address: form.located_address,
         preferred_areas: preferredAreas.map(a => a.trim()).filter(Boolean),
@@ -348,11 +349,11 @@ export const ProfileCompletionModal = ({ isOpen, onClose, prefillName, prefillEm
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3.5">
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-0.5">Age</label>
+                        <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-0.5">Age</label>
                         <div className="relative">
-                          <Calendar size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
                             type="number"
                             required
@@ -361,24 +362,42 @@ export const ProfileCompletionModal = ({ isOpen, onClose, prefillName, prefillEm
                             max="100"
                             value={form.age}
                             onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
-                            className="w-full pl-10 pr-4 py-3.5 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 focus:bg-slate-900/80 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-transparent transition-all text-sm font-semibold"
+                            className="w-full pl-8 pr-1 py-3.5 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 focus:bg-slate-900/80 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-transparent transition-all text-xs font-semibold"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-0.5">Experience</label>
+                        <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-0.5">Gender</label>
                         <div className="relative">
-                          <Briefcase size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <Users size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <select
+                            required
+                            value={form.gender}
+                            onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
+                            className="w-full pl-8 pr-1 py-3.5 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 focus:bg-slate-900/80 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-transparent transition-all text-xs appearance-none cursor-pointer font-semibold"
+                          >
+                            <option value="">Gender</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-0.5">Exp (Yrs)</label>
+                        <div className="relative">
+                          <Briefcase size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
                             type="number"
                             required
-                            placeholder="Years"
+                            placeholder="Yrs"
                             min="0"
                             max="50"
                             value={form.experience}
                             onChange={(e) => setForm((f) => ({ ...f, experience: e.target.value }))}
-                            className="w-full pl-10 pr-4 py-3.5 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 focus:bg-slate-900/80 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-transparent transition-all text-sm font-semibold"
+                            className="w-full pl-8 pr-1 py-3.5 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 focus:bg-slate-900/80 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-transparent transition-all text-xs font-semibold"
                           />
                         </div>
                       </div>

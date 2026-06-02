@@ -140,7 +140,7 @@ export default function Signup() {
     if (!name || !email || !password || !phone || !age) {
       setError("Please fill in all basic fields."); return;
     }
-    if (selectedRole === "user" && !gender) {
+    if (!gender) {
       setError("Please select a gender."); return;
     }
     if (selectedRole === "worker") {
@@ -167,6 +167,7 @@ export default function Signup() {
       const extraFields = selectedRole === "worker" ? {
         name,
         age: Number(age),
+        gender,
         experience: Number(experience),
         located_address,
         preferred_areas: preferred_areas.split(",").map(a => a.trim()).filter(Boolean),
@@ -387,7 +388,7 @@ export default function Signup() {
                 </div>
               </div>
 
-              {/* Phone + Age + Role-specific Gender/Experience */}
+              {/* Phone + Age + Gender */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
                   <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-300 mb-1.5 ml-0.5">Phone</label>
@@ -416,24 +417,27 @@ export default function Signup() {
                   />
                 </div>
                 <div>
-                  {selectedRole === "user" ? (
-                    <>
-                      <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-300 mb-1.5 ml-0.5">Gender</label>
-                      <select
-                        id="signup-gender"
-                        value={form.gender}
-                        onChange={set("gender")}
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950/60 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm cursor-pointer animate-fade-in"
-                        required={selectedRole === "user"}
-                      >
-                        <option value="">Select</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </>
-                  ) : (
-                    <>
+                  <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-300 mb-1.5 ml-0.5">Gender</label>
+                  <select
+                    id="signup-gender"
+                    value={form.gender}
+                    onChange={set("gender")}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950/60 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-transparent outline-none transition-all text-sm cursor-pointer animate-fade-in"
+                    required
+                  >
+                    <option value="">Select</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Worker Specific located_address, preferred_areas, photo */}
+              {selectedRole === "worker" && (
+                <div className="space-y-4 animate-fade-in border-t border-slate-850 pt-4 mt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div>
                       <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-300 mb-1.5 ml-0.5">Experience (Yrs)</label>
                       <input
                         id="signup-experience"
@@ -446,15 +450,8 @@ export default function Signup() {
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950/60 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-transparent outline-none transition-all text-sm animate-fade-in"
                         required={selectedRole === "worker"}
                       />
-                    </>
-                  )}
-                </div>
-              </div>
+                    </div>
 
-              {/* Worker Specific located_address, preferred_areas, photo */}
-              {selectedRole === "worker" && (
-                <div className="space-y-4 animate-fade-in border-t border-slate-850 pt-4 mt-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
                       <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-300 mb-1.5 ml-0.5">Pincode</label>
                       <div className="relative">
