@@ -139,6 +139,7 @@ export const ProfileCompletionModal = ({ isOpen, onClose, prefillName, prefillEm
     setLoading(true);
     try {
       const payload = role === "worker" ? {
+        role: "worker",
         name: form.name,
         age: Number(form.age),
         gender: form.gender,
@@ -149,6 +150,7 @@ export const ProfileCompletionModal = ({ isOpen, onClose, prefillName, prefillEm
         phone: form.phone,
         categories: selectedCategories,
       } : {
+        role: "user",
         name: form.name,
         age: Number(form.age),
         gender: form.gender,

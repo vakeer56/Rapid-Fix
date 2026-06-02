@@ -563,8 +563,12 @@ const firebaseAuthController = async (req, res) => {
 // Body: { name, age, phone, ...role-specific-fields }
 const firebaseCompleteProfileController = async (req, res) => {
     try {
-        const { firebaseUid, email, role = "user", photo } = req.user; // from requireSetupToken middleware
-        const standardRole = role === "worker" ? "worker" : "user";
+        const { firebaseUid, email, role: tokenRole, photo } = req.user; // from requireSetupToken middleware
+        const { role: bodyRole } = req.body;
+
+        // Prioritize the role explicitly sent in the body to handle auto-login edge cases correctly
+        const resolvedRole = bodyRole || tokenRole || "user";
+        const standardRole = resolvedRole === "worker" ? "worker" : "user";
 
         if (standardRole === "worker") {
             const { name, age, gender, experience, located_address, preferred_areas, photo, phone, categories } = req.body;
