@@ -879,7 +879,7 @@ export default function Profile() {
                       className="px-5 py-2 rounded-xl bg-blue-900 dark:bg-orange-600 hover:bg-blue-800 dark:hover:bg-orange-500 text-white font-bold text-xs shadow-sm active:scale-[0.97] transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       {addressLoading && <Loader2 size={12} className="animate-spin" />}
-                      Save Profile
+                      Save Address
                     </button>
                   </div>
                 </form>

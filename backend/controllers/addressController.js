@@ -3,7 +3,7 @@ const address = require("../model/address.model");
 
 const addAddress = async (req, res) => {
     try{
-        const {belong_to, address : Address, area, city, district, state, pin_code} = req.body;
+        const {belong_to, address : Address, area, city, district, state, pin_code, isSaved} = req.body;
         if(!belong_to || !Address || !area || !city || !district || !state || !pin_code){
             return res.status(400).json({message: "All fields are required"});
         }
@@ -14,7 +14,8 @@ const addAddress = async (req, res) => {
             city,
             district,
             state,
-            pin_code
+            pin_code,
+            isSaved: isSaved !== undefined ? isSaved : true
         });
         await newAddress.save();
         return res.status(201).json({message: "Address added successfully", newAddress, addressId: newAddress._id});
@@ -58,7 +59,7 @@ const getAddressesByUser = async (req, res) => {
         if(!userId){
             return res.status(400).json({message: "Please provide a user id"});
         }
-        const addresses = await address.find({belong_to: userId});
+        const addresses = await address.find({belong_to: userId, isSaved: { $ne: false }});
         return res.status(200).json({addresses});
     }catch(error){
         console.log(error);

@@ -72,4 +72,21 @@ const verifyFirebaseToken = async (idToken) => {
   }
 };
 
-module.exports = { verifyFirebaseToken };
+/**
+ * Delete a user from Firebase Auth using Admin SDK.
+ * Catches auth/user-not-found safely.
+ */
+const deleteFirebaseUser = async (uid) => {
+  initAdmin();
+  try {
+    await admin.auth().deleteUser(uid);
+    console.log(`[FirebaseAdmin] Successfully deleted auth user: ${uid}`);
+  } catch (err) {
+    console.warn(`[FirebaseAdmin] deleteUser ${uid} failed:`, err.message);
+    if (err.code !== 'auth/user-not-found') {
+      throw err;
+    }
+  }
+};
+
+module.exports = { verifyFirebaseToken, deleteFirebaseUser };

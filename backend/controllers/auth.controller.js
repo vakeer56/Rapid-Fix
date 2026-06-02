@@ -958,6 +958,16 @@ const deleteAccountController = async (req, res) => {
             });
         }
 
+        // Delete from Firebase Auth using Admin SDK if firebaseUid is present
+        if (account.firebaseUid) {
+            try {
+                const { deleteFirebaseUser } = require("../middleware/firebaseAdmin.middleware");
+                await deleteFirebaseUser(account.firebaseUid);
+            } catch (fbAdminErr) {
+                console.warn("[deleteAccountController] Firebase Admin SDK deleteUser failed (likely due to unconfigured admin service credentials):", fbAdminErr.message);
+            }
+        }
+
         if (role === "worker") {
             // Dissociate worker from active assignments and revert problem status to pending
             await Problem.updateMany(

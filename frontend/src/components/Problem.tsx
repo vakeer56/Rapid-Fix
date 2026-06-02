@@ -108,6 +108,7 @@ export default function Problem({
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   const [showNewAddressForm, setShowNewAddressForm] = useState<boolean>(false);
+  const [saveAddress, setSaveAddress] = useState<boolean>(true);
   const [newAddress, setNewAddress] = useState({
     address: "",
     area: "",
@@ -289,6 +290,7 @@ export default function Problem({
           district,
           state,
           pin_code: Number(pin_code),
+          isSaved: saveAddress,
         });
 
         if (addressRes.data && addressRes.data.addressId) {
@@ -710,6 +712,23 @@ export default function Problem({
                             </select>
                             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 text-[10px]">▼</div>
                           </div>
+                        </div>
+
+                        {/* Save Address for Future Use Checkbox */}
+                        <div className="flex items-center gap-2 mt-1 ml-0.5 select-none animate-fade-in">
+                          <input
+                            type="checkbox"
+                            id="save-address-checkbox"
+                            checked={saveAddress}
+                            onChange={(e) => setSaveAddress(e.target.checked)}
+                            className="w-3.5 h-3.5 rounded border-slate-800 bg-slate-950 text-orange-500 focus:ring-orange-500/50 cursor-pointer accent-orange-500"
+                          />
+                          <label
+                            htmlFor="save-address-checkbox"
+                            className="text-[10px] font-bold text-slate-400 hover:text-slate-300 cursor-pointer transition-colors"
+                          >
+                            Save this address to my profile for future use
+                          </label>
                         </div>
                         {addresses.length > 0 && (
                           <button

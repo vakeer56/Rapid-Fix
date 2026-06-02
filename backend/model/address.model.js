@@ -29,6 +29,10 @@ const addressSchema = new Schema({
     pin_code:{
         type:Number,
         required: true
+    },
+    isSaved: {
+        type: Boolean,
+        default: true
     }        
 });
 const addressModel = model("address",addressSchema);
