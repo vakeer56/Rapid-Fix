@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useAuth } from "../context/AuthContext";
@@ -72,7 +73,8 @@ const INDIAN_STATES = [
 ];
 
 export default function Profile() {
-  const { appUser, appToken, onAuthSuccess } = useAuth();
+  const { appUser, appToken, onAuthSuccess, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const [form, setForm] = useState({
     name: appUser?.name || "",
@@ -94,6 +96,42 @@ export default function Profile() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [resetSuccess, setResetSuccess] = useState(false);
+
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const handleDeleteAccount = async () => {
+    if (!deleteConfirmation) return;
+    setDeleteLoading(true);
+    setDeleteError("");
+    try {
+      // 1. Delete from backend MongoDB database
+      await api.delete("/auth/delete-account", {
+        data: { confirmation: deleteConfirmation }
+      });
+
+      // 2. Delete from Firebase Authentication client side
+      if (auth.currentUser) {
+        try {
+          await auth.currentUser.delete();
+        } catch (firebaseErr: any) {
+          console.warn("[Firebase] Client side user delete skipped or failed:", firebaseErr.message);
+          // If deletion requires recent login, sign them out so their session is cleared anyway
+          await auth.signOut();
+        }
+      }
+
+      // 3. Complete logout on the application context
+      await signOut();
+      navigate("/", { replace: true });
+    } catch (err: any) {
+      console.error("Account deletion error:", err);
+      setDeleteError(err?.response?.data?.message || "Failed to permanently delete account.");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const [preferredAreas, setPreferredAreas] = useState<string[]>([""]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -928,6 +966,60 @@ export default function Profile() {
                   {resetLoading ? "Dispatching link…" : "Send Password Reset Email"}
                 </button>
               )}
+            </div>
+
+            {/* Danger Zone */}
+            <div className="glass-panel rounded-3xl p-6 sm:p-8 shadow-sm border border-red-500/20 bg-red-500/[0.02] mt-6">
+              <h3 className="text-lg font-bold text-red-500 mb-2 flex items-center gap-2">
+                <Trash2 size={18} className="text-red-500" />
+                Danger Zone: Delete Account
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                Permanently delete your profile, address records, and dispatch histories. Ratings and reviews will be preserved. **This action cannot be undone.**
+              </p>
+
+              <div className="space-y-4">
+                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl text-xs flex items-center gap-2 leading-relaxed">
+                  <span className="font-bold">Verification required:</span>
+                  <span>Type <code className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-[11px] font-black select-all text-white">{appUser?.role}@{appUser?.name}</code> to confirm deletion.</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-end">
+                  <div className="w-full">
+                    <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1.5 ml-0.5">Confirmation text</label>
+                    <input
+                      type="text"
+                      placeholder={`${appUser?.role}@${appUser?.name}`}
+                      value={deleteConfirmation}
+                      onChange={(e) => setDeleteConfirmation(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/60 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-transparent outline-none transition-all text-sm font-semibold"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleDeleteAccount}
+                    disabled={deleteLoading || deleteConfirmation !== `${appUser?.role}@${appUser?.name}`}
+                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-350 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-600 text-white font-bold text-xs transition-all shadow-md hover:shadow-red-500/10 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2"
+                  >
+                    {deleteLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Deleting Account permanently…
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={14} />
+                        Delete Account permanently
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {deleteError && (
+                  <p className="text-xs text-red-500 font-bold mt-2 animate-pulse">{deleteError}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

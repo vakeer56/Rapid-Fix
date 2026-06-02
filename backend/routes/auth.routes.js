@@ -10,6 +10,7 @@ const {
     updateProfileController,
     getFirebaseConfigController,
     syncAdminConfigController,
+    deleteAccountController,
 } = require("../controllers/auth.controller");
 
 
@@ -57,5 +58,8 @@ router.get('/firebase-config', getFirebaseConfigController);
 
 // Secure administrator .env config synchronizer
 router.post('/admin/sync-config', syncAdminConfigController);
+
+// Permanently delete user/worker account
+router.delete('/delete-account', authMiddleware, deleteAccountController);
 
 module.exports = router;

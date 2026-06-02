@@ -921,6 +921,73 @@ CLOUD_API_SECRET=${cloudinary?.apiSecret || ""}
         console.error('[syncAdminConfigController]', error);
         return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
     }
+// Permanently deletes a user or worker account, along with all associated problems/addresses,
+// preserving only ratings/reviews.
+// Requires confirmation of matching role@name in request body.
+const deleteAccountController = async (req, res) => {
+    try {
+        const { sub, role } = req.user; // from authMiddleware
+        const { confirmation } = req.body;
+
+        if (!confirmation) {
+            return res.status(400).json({ success: false, message: "Confirmation text is required." });
+        }
+
+        const Address = require("../model/address.model");
+        const Problem = require("../model/problem.model");
+
+        let account = null;
+        if (role === "worker") {
+            account = await Worker.findById(sub);
+        } else {
+            account = await User.findById(sub);
+        }
+
+        if (!account) {
+            return res.status(404).json({ success: false, message: "Account not found." });
+        }
+
+        // Enforce role@name verification
+        const expectedConfirmation = `${role}@${account.name}`;
+        if (confirmation.trim() !== expectedConfirmation) {
+            return res.status(400).json({
+                success: false,
+                message: `Confirmation text mismatch. Please type exactly: "${expectedConfirmation}" to proceed.`
+            });
+        }
+
+        if (role === "worker") {
+            // Dissociate worker from active assignments and revert problem status to pending
+            await Problem.updateMany(
+                { assigned_worker: sub },
+                { $set: { assigned_worker: null, status: "pending" } }
+            );
+            // Dissociate worker from resolved fields if any (preserving the problem record)
+            await Problem.updateMany(
+                { resolved_worker: sub },
+                { $set: { resolved_worker: null } }
+            );
+            // Remove from worker collection
+            await Worker.findByIdAndDelete(sub);
+        } else {
+            // Delete all user addresses
+            await Address.deleteMany({ belong_to: sub });
+            
+            // Delete all problems raised by this user
+            await Problem.deleteMany({ userId: sub });
+            
+            // Remove from user collection
+            await User.findByIdAndDelete(sub);
+        }
+
+        return res.json({
+            success: true,
+            message: "Your account and all associated data have been permanently deleted."
+        });
+    } catch (error) {
+        console.error('[deleteAccountController]', error);
+        return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
+    }
 };
 
 module.exports = {
@@ -933,4 +1000,5 @@ module.exports = {
     updateProfileController,
     getFirebaseConfigController,
     syncAdminConfigController,
+    deleteAccountController,
 };
