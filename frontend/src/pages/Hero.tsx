@@ -3,7 +3,7 @@ import { ArrowRight, Wrench } from "lucide-react";
 
 const Hero = () => {
   return (
-    <section className="w-full min-h-screen flex items-center justify-center px-6 md:px-16 bg-transparent transition-colors duration-300">
+    <section id="home" className="w-full min-h-screen flex items-center justify-center px-6 md:px-16 bg-transparent transition-colors duration-300">
       <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center pt-24 md:pt-16">
         {/* Left Content */}
         <div className="space-y-8">

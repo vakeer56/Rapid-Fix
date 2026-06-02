@@ -57,7 +57,10 @@ const getAllProblems = async (req, res) => {
             status: "pending",
             assigned_worker: null,
             rejected_workers: { $nin: [workerObjectId] },
-            category: { $in: worker.categories || [] }
+            $or: [
+                { category: "Other" },
+                { category: { $in: worker.categories || [] } }
+            ]
             }
         },
         {

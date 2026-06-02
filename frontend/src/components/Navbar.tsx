@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { Sun, Moon, LayoutDashboard, LogOut } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
@@ -10,7 +11,7 @@ interface NavLinkItem {
 }
 
 const NAV_LINKS: NavLinkItem[] = [
-  { label: "Home", href: "/" },
+  { label: "Home", href: "#home" },
   { label: "About", href: "#about" },
   { label: "How it Works", href: "#how-it-works" },
 ];
@@ -21,6 +22,54 @@ export default function Navbar() {
     const location = useLocation();
 
     const isLanding = location.pathname === "/";
+    const [activeSection, setActiveSection] = useState<string>("home");
+
+    useEffect(() => {
+        if (location.pathname !== "/") {
+            setActiveSection("");
+            return;
+        }
+
+        const handleScroll = () => {
+            const scrollPos = window.scrollY;
+            if (scrollPos < 50) {
+                setActiveSection("home");
+                return;
+            }
+
+            const aboutSec = document.getElementById("about");
+            const howSec = document.getElementById("how-it-works");
+
+            const threshold = 120;
+            let current = "home";
+
+            if (howSec && howSec.getBoundingClientRect().top <= threshold) {
+                current = "how-it-works";
+            } else if (aboutSec && aboutSec.getBoundingClientRect().top <= threshold) {
+                current = "about";
+            }
+
+            setActiveSection(current);
+        };
+
+        window.addEventListener("scroll", handleScroll);
+        handleScroll();
+
+        return () => window.removeEventListener("scroll", handleScroll);
+    }, [location.pathname]);
+
+    // Handle smooth scrolling when navigating to landing page with a hash from another page
+    useEffect(() => {
+        if (location.pathname === "/" && location.hash) {
+            const id = location.hash.replace("#", "");
+            const element = document.getElementById(id);
+            if (element) {
+                setTimeout(() => {
+                    element.scrollIntoView({ behavior: "smooth" });
+                }, 100);
+            }
+        }
+    }, [location.pathname, location.hash]);
 
     const getInitials = (name: string) => {
         if (!name) return "U";
@@ -36,9 +85,13 @@ export default function Navbar() {
             {/* NAV-BARS */}
             <ul className="hidden md:flex gap-4 lg:gap-6 list-none m-0 p-0 items-center">
                 {NAV_LINKS.map((link: NavLinkItem) => {
-                    const isActive = link.href === "/"
-                        ? location.pathname === "/" && !location.hash
-                        : location.pathname === link.href || (location.pathname === "/" && location.hash === link.href);
+                    const isActive = link.href === "#home" || link.href === "/"
+                        ? activeSection === "home"
+                        : link.href === "#about"
+                        ? activeSection === "about"
+                        : link.href === "#how-it-works"
+                        ? activeSection === "how-it-works"
+                        : location.pathname === link.href;
 
                     return (
                         <li key={link.label}>
