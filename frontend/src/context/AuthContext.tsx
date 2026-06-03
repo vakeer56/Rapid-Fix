@@ -103,8 +103,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setAppUser(userWithRole);
           localStorage.setItem("rf_app_user", JSON.stringify(userWithRole));
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn("[Auth] Profile sync with server failed or offline:", err);
+        if (err.response?.status === 404) {
+          console.log("[Auth] User profile not found in database. Signing out...");
+          signOut();
+        }
       }
     };
     syncProfile();

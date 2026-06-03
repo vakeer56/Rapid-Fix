@@ -714,7 +714,7 @@ export default function Profile() {
                                       : cat.id === "Mechanic" ? "bg-purple-500/20 border-purple-500 text-purple-600 dark:text-purple-400 shadow-md shadow-purple-500/10 animate-scale-up"
                                       : cat.id === "Technician" ? "bg-emerald-500/20 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-md shadow-emerald-500/10 animate-scale-up"
                                       : "bg-orange-600/20 border-orange-500 text-orange-600 dark:text-orange-400 shadow-md shadow-orange-500/10 animate-scale-up"
-                                    : "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                                    : "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                                 }`}
                               >
                                 {cat.label}
@@ -1000,7 +1000,7 @@ export default function Profile() {
                     type="button"
                     onClick={handleDeleteAccount}
                     disabled={deleteLoading || deleteConfirmation !== `${appUser?.role}@${appUser?.name}`}
-                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-350 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-600 text-white font-bold text-xs transition-all shadow-md hover:shadow-red-500/10 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-600 text-white font-bold text-xs transition-all shadow-md hover:shadow-red-500/10 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2"
                   >
                     {deleteLoading ? (
                       <>

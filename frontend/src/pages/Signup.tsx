@@ -341,7 +341,7 @@ export default function Signup() {
               className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border border-slate-800 bg-slate-950 hover:bg-slate-900 text-white font-bold text-xs transition-all shadow-sm hover:shadow-md disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] mb-5 cursor-pointer"
             >
               {googleLoading ? (
-                <span className="w-4 h-4 border-2 border-slate-350 border-t-blue-500 rounded-full animate-spin" />
+                <span className="w-4 h-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
               ) : (
                 <GoogleIcon />
               )}

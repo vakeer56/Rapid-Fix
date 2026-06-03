@@ -12,6 +12,8 @@ app.use(cors());
 require('dotenv').config();
 
 const problemRoutes = require('../backend/routes/problem.Route.js');
+const communityRoutes = require('./routes/community.routes');
+const aiRoutes = require('./routes/ai.routes');
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -32,6 +34,8 @@ const workerRoutes = require("./routes/worker.routes");
 
 app.use("/workers", workerRoutes);
 app.use('/problem', problemRoutes);
+app.use('/community', communityRoutes);
+app.use('/ai', aiRoutes);
 app.use("/auth", authRoutes);
 
 const http = require('http');

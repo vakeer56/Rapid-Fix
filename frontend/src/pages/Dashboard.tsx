@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Problem from "../components/Problem";
 import { useAuth } from "../context/AuthContext";
+import { usePopup } from "../context/PopupContext";
 import api from "../service/api";
 import { 
   AlertCircle, 
@@ -78,6 +79,7 @@ interface ProblemRequest {
 
 export default function Dashboard() {
   const { appUser } = useAuth();
+  const { showAlert } = usePopup();
   
   // Customer states
   const [requests, setRequests] = useState<ProblemRequest[]>([]);
@@ -277,7 +279,7 @@ export default function Dashboard() {
         await Promise.all([fetchAvailableJobs(), fetchActiveAssignments()]);
       }
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to claim the job.");
+      await showAlert("Claim Job Error", err?.response?.data?.message || "Failed to claim the job.", "error");
     } finally {
       setClaimLoadingId(null);
     }
@@ -291,7 +293,7 @@ export default function Dashboard() {
         await Promise.all([fetchAvailableJobs(), fetchActiveAssignments()]);
       }
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to start progress.");
+      await showAlert("Start Progress Error", err?.response?.data?.message || "Failed to start progress.", "error");
     } finally {
       setProgressLoadingId(null);
     }
@@ -318,7 +320,7 @@ export default function Dashboard() {
         await Promise.all([fetchAvailableJobs(), fetchActiveAssignments()]);
       }
     } catch (err: any) {
-      alert("Failed to resolve job.");
+      await showAlert("Resolve Job Error", "Failed to resolve job.", "error");
     } finally {
       setCompletingLoading(false);
     }
@@ -350,7 +352,7 @@ export default function Dashboard() {
         }, 1500);
       }
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to submit review.");
+      await showAlert("Review Error", err?.response?.data?.message || "Failed to submit review.", "error");
     } finally {
       setReviewLoading(false);
     }
@@ -394,7 +396,7 @@ export default function Dashboard() {
   const getCategoryBadge = (cat?: string) => {
     if (!cat) return null;
     let emoji = "🛠️";
-    let colorClass = "bg-slate-800 text-slate-350 border-slate-700/80";
+    let colorClass = "bg-slate-800 text-slate-300 border-slate-700/80";
     if (cat === "Plumber") {
       emoji = "🪠";
       colorClass = "bg-blue-500/10 border-blue-500/30 text-blue-400";
@@ -818,7 +820,7 @@ export default function Dashboard() {
                             </span>
                           </div>
 
-                          <p className="text-slate-355 text-xs leading-relaxed max-w-xl">{assignment.description}</p>
+                          <p className="text-slate-300 text-xs leading-relaxed max-w-xl">{assignment.description}</p>
 
                           {assignment.address && (
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-slate-400 bg-slate-950/40 rounded-2xl p-4 border border-slate-850">
@@ -1133,7 +1135,7 @@ export default function Dashboard() {
                     </div>
 
                     {/* Body description */}
-                    <p className="text-slate-600 dark:text-slate-350 text-sm leading-relaxed mb-4 line-clamp-2">
+                    <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed mb-4 line-clamp-2">
                       {req.description}
                     </p>
 

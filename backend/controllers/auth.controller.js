@@ -503,6 +503,13 @@ const firebaseAuthController = async (req, res) => {
             }
         }
 
+        console.log("[Auth Debug] Found Account:", account ? account.toObject() : "null");
+        console.log("[Auth Debug] standardRole:", standardRole);
+        if (account) {
+            console.log("[Auth Debug] name:", !!account.name, "age:", !!account.age, "gender:", !!account.gender, "phone:", !!account.phone);
+            console.log("[Auth Debug] isProfileComplete:", isProfileComplete(account));
+        }
+
         // If account exists and profile is complete, issue token
         if (account && isProfileComplete(account)) {
             if (standardRole === "user" && !account.photo && firebaseUser.picture) {
@@ -782,6 +789,7 @@ const updateProfileController = async (req, res) => {
         return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
     }
 };
+
 // Retrieves the public client-side Firebase configurations securely from process.env
 const getFirebaseConfigController = async (req, res) => {
     try {
@@ -812,7 +820,7 @@ const syncAdminConfigController = async (req, res) => {
         const dotenv = require('dotenv');
         const mongoose = require('mongoose');
 
-        const { mongo, firebase, cloudinary } = req.body;
+        const { mongo, firebase, cloudinary, gemini } = req.body;
 
         if (!mongo || !firebase) {
             return res.status(400).json({ success: false, message: 'mongo and firebase parameters are required' });
@@ -841,6 +849,9 @@ VITE_FIREBASE_MESAURE_ID=${firebase.measurementId || ""}
 CLOUD_NAME=${cloudinary?.cloudName || ""}
 CLOUD_API_KEY=${cloudinary?.apiKey || ""}
 CLOUD_API_SECRET=${cloudinary?.apiSecret || ""}
+
+# Gemini AI Configuration
+GEMINI_API_KEY=${gemini?.apiKey || ""}
 `;
 
         // Paths to save
@@ -937,6 +948,8 @@ const deleteAccountController = async (req, res) => {
 
         const Address = require("../model/address.model");
         const Problem = require("../model/problem.model");
+        const Worker = require("../model/worker.model");
+        const User = require("../model/user.model");
 
         let account = null;
         if (role === "worker") {
@@ -1002,6 +1015,43 @@ const deleteAccountController = async (req, res) => {
     }
 };
 
+// Retrieve the active backend environment configuration (excluding/masking if needed, or returning directly as requested)
+const getAdminConfigController = async (req, res) => {
+    try {
+        return res.json({
+            success: true,
+            config: {
+                mongo: {
+                    uri: process.env.MONGODB_URL || "",
+                    dbName: process.env.MONGODB_DB_NAME || "rapid_fix_db",
+                    maxPoolSize: Number(process.env.MONGODB_MAX_POOL_SIZE) || 10,
+                    timeout: Number(process.env.MONGODB_TIMEOUT) || 5000,
+                },
+                firebase: {
+                    apiKey: process.env.VITE_FIREBASE_API_KEY || "",
+                    authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+                    projectId: process.env.VITE_FIREBASE_PROJECT_ID || "",
+                    storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+                    messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+                    appId: process.env.VITE_FIREBASE_APP_ID || "",
+                    measurementId: process.env.VITE_FIREBASE_MESAURE_ID || "",
+                },
+                cloudinary: {
+                    cloudName: process.env.CLOUD_NAME || "",
+                    apiKey: process.env.CLOUD_API_KEY || "",
+                    apiSecret: process.env.CLOUD_API_SECRET || "",
+                },
+                gemini: {
+                    apiKey: process.env.GEMINI_API_KEY || "",
+                }
+            }
+        });
+    } catch (error) {
+        console.error('[getAdminConfigController]', error);
+        return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
+    }
+};
+
 module.exports = {
     sendOtpController,
     verifyOtpController,
@@ -1012,5 +1062,6 @@ module.exports = {
     updateProfileController,
     getFirebaseConfigController,
     syncAdminConfigController,
+    getAdminConfigController,
     deleteAccountController,
 };

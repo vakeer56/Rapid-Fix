@@ -6,7 +6,9 @@ import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import LandingPage from "./pages/Landing";
 import SuperAdmin from "./pages/SuperAdmin";
+import Community from "./pages/Community";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import AIAssistantWidget from "./components/AIAssistantWidget";
 
 function App() {
   return (
@@ -22,12 +24,15 @@ function App() {
           <Route path='/signup' element={<Signup />} />
           <Route path='/dashboard' element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path='/profile' element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path='/community' element={<Community />} />
           <Route path='/' element={<LandingPage />} />
           <Route path='/super-admin' element={<SuperAdmin />} />
         </Routes>
+        <AIAssistantWidget />
       </BrowserRouter>
     </div>
   );
 }
 
 export default App
+

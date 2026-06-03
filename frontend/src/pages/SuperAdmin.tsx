@@ -43,6 +43,10 @@ interface CloudinaryConfig {
   apiSecret: string;
 }
 
+interface GeminiConfig {
+  apiKey: string;
+}
+
 export default function SuperAdmin() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem("rf_super_admin_authenticated") === "true";
@@ -52,45 +56,59 @@ export default function SuperAdmin() {
   const [adminError, setAdminError] = useState("");
   const [showAdminPass, setShowAdminPass] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "mongodb" | "firebase" | "cloudinary" | "dotenv">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "mongodb" | "firebase" | "cloudinary" | "gemini" | "dotenv">("dashboard");
   
-  // Loading initial configurations from localStorage or defaults
-  const [mongo, setMongo] = useState<MongoConfig>(() => {
-    const saved = localStorage.getItem("rf_mongo_config");
-    return saved ? JSON.parse(saved) : {
-      uri: "mongodb://localhost:27017",
-      dbName: "rapid_fix_db",
-      maxPoolSize: 10,
-      timeout: 5000
-    };
+  // Initial configurations, will be dynamically populated from backend .env
+  const [mongo, setMongo] = useState<MongoConfig>({
+    uri: "",
+    dbName: "",
+    maxPoolSize: 10,
+    timeout: 5000
   });
 
-  const [firebase, setFirebase] = useState<FirebaseConfig>(() => {
-    const saved = localStorage.getItem("rf_firebase_config");
-    return saved ? JSON.parse(saved) : {
-      apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-      appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
-      measurementId: import.meta.env.VITE_FIREBASE_MESAURE_ID || ""
-    };
+  const [firebase, setFirebase] = useState<FirebaseConfig>({
+    apiKey: "",
+    authDomain: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: "",
+    measurementId: ""
   });
 
-  const [cloudinary, setCloudinary] = useState<CloudinaryConfig>(() => {
-    const saved = localStorage.getItem("rf_cloudinary_config");
-    return saved ? JSON.parse(saved) : {
-      cloudName: import.meta.env.VITE_CLOUD_NAME || "",
-      apiKey: import.meta.env.VITE_CLOUD_API_KEY || "",
-      apiSecret: import.meta.env.VITE_CLOUD_API_SECRET || ""
-    };
+  const [cloudinary, setCloudinary] = useState<CloudinaryConfig>({
+    cloudName: "",
+    apiKey: "",
+    apiSecret: ""
+  });
+
+  const [gemini, setGemini] = useState<GeminiConfig>({
+    apiKey: ""
   });
 
   const [logs, setLogs] = useState<string[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const fetchActiveConfig = async () => {
+    try {
+      addLog("[SYSTEM] Fetching active environment configurations from backend...");
+      const response = await api.get("/auth/admin/config");
+      if (response.data && response.data.success && response.data.config) {
+        const { mongo, firebase, cloudinary, gemini } = response.data.config;
+        if (mongo) setMongo(mongo);
+        if (firebase) setFirebase(firebase);
+        if (cloudinary) setCloudinary(cloudinary);
+        if (gemini) setGemini(gemini);
+        addLog("[SYSTEM] Successfully loaded configurations from backend .env!");
+      } else {
+        addLog("[SYSTEM] Failed to load configurations from backend.");
+      }
+    } catch (err: any) {
+      addLog(`[SYSTEM] Error retrieving backend configuration: ${err.message}`);
+    }
+  };
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,11 +128,17 @@ export default function SuperAdmin() {
     setAdminPassword("");
   };
 
+  // Fetch configs from the server when authenticated
+  useEffect(() => {
+    if (isAdminAuthenticated) {
+      fetchActiveConfig();
+    }
+  }, [isAdminAuthenticated]);
+
   // Generate logs simulation
   useEffect(() => {
     const mockLogs = [
       "[SYSTEM] Control Center initialized.",
-      `[DATABASE] Local connection pool configured to ${mongo.maxPoolSize}.`,
       "[FIREBASE] App instance ready for authentication integrations.",
       "[API] Server route mapping successfully verified."
     ];
@@ -129,19 +153,26 @@ export default function SuperAdmin() {
   const syncConfigsToServer = async (
     targetMongo: MongoConfig, 
     targetFirebase: FirebaseConfig, 
-    targetCloudinary?: CloudinaryConfig
+    targetCloudinary?: CloudinaryConfig,
+    targetGemini?: GeminiConfig
   ) => {
     const activeCloudinary = targetCloudinary || cloudinary;
+    const activeGemini = targetGemini || gemini;
     addLog("[SYSTEM] Initiating server-side .env sync operation...");
     try {
       const response = await api.post("/auth/admin/sync-config", {
         mongo: targetMongo,
         firebase: targetFirebase,
-        cloudinary: activeCloudinary
+        cloudinary: activeCloudinary,
+        gemini: activeGemini
       });
       if (response.data && response.data.success) {
         addLog(`[SYSTEM] Sync successful! Database: ${response.data.dbStatus}`);
         addLog("[SYSTEM] In-memory process.env successfully hot-reloaded.");
+        
+        // Save the Firebase config to localStorage to allow dynamic runtime initialization in production
+        localStorage.setItem("rf_firebase_config", JSON.stringify(targetFirebase));
+
         triggerSaveSuccess();
         setTimeout(() => {
           window.location.reload();
@@ -156,23 +187,26 @@ export default function SuperAdmin() {
 
   const handleSaveMongo = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem("rf_mongo_config", JSON.stringify(mongo));
-    addLog(`[MONGO] Dynamic configurations updated locally: dbName=${mongo.dbName}`);
-    await syncConfigsToServer(mongo, firebase, cloudinary);
+    addLog(`[MONGO] Dynamic configurations updated: dbName=${mongo.dbName}`);
+    await syncConfigsToServer(mongo, firebase, cloudinary, gemini);
   };
 
   const handleSaveFirebase = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem("rf_firebase_config", JSON.stringify(firebase));
-    addLog(`[FIREBASE] Dynamic credentials updated locally: apiKey=${(firebase.apiKey || "").substring(0, 8)}...`);
-    await syncConfigsToServer(mongo, firebase, cloudinary);
+    addLog(`[FIREBASE] Dynamic credentials updated: apiKey=${(firebase.apiKey || "").substring(0, 8)}...`);
+    await syncConfigsToServer(mongo, firebase, cloudinary, gemini);
   };
 
   const handleSaveCloudinary = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem("rf_cloudinary_config", JSON.stringify(cloudinary));
-    addLog(`[CLOUDINARY] Dynamic credentials updated locally: cloudName=${cloudinary.cloudName}`);
-    await syncConfigsToServer(mongo, firebase, cloudinary);
+    addLog(`[CLOUDINARY] Dynamic credentials updated: cloudName=${cloudinary.cloudName}`);
+    await syncConfigsToServer(mongo, firebase, cloudinary, gemini);
+  };
+
+  const handleSaveGemini = async (e: React.FormEvent) => {
+    e.preventDefault();
+    addLog(`[GEMINI] Dynamic credentials updated: apiKey=${(gemini.apiKey || "").substring(0, 8)}...`);
+    await syncConfigsToServer(mongo, firebase, cloudinary, gemini);
   };
 
   const triggerSaveSuccess = () => {
@@ -218,6 +252,9 @@ VITE_FIREBASE_MESAURE_ID=${firebase.measurementId}
 CLOUD_NAME=${cloudinary.cloudName}
 CLOUD_API_KEY=${cloudinary.apiKey}
 CLOUD_API_SECRET=${cloudinary.apiSecret}
+
+# Gemini AI Configuration
+GEMINI_API_KEY=${gemini.apiKey}
 `;
   };
 
@@ -239,35 +276,9 @@ CLOUD_API_SECRET=${cloudinary.apiSecret}
     document.body.removeChild(element);
   };
 
-  const resetToEnvDefaults = () => {
-    localStorage.removeItem("rf_mongo_config");
-    localStorage.removeItem("rf_firebase_config");
-    localStorage.removeItem("rf_cloudinary_config");
-    
-    setMongo({
-      uri: "mongodb://localhost:27017",
-      dbName: "rapid_fix_db",
-      maxPoolSize: 10,
-      timeout: 5000
-    });
-
-    setFirebase({
-      apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-      appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
-      measurementId: import.meta.env.VITE_FIREBASE_MESAURE_ID || ""
-    });
-
-    setCloudinary({
-      cloudName: import.meta.env.VITE_CLOUD_NAME || "",
-      apiKey: import.meta.env.VITE_CLOUD_API_KEY || "",
-      apiSecret: import.meta.env.VITE_CLOUD_API_SECRET || ""
-    });
-
-    addLog("[SYSTEM] Reset all dynamic values. Falling back to native .env.");
+  const resetToEnvDefaults = async () => {
+    addLog("[SYSTEM] Resetting dynamic configurations to active backend .env values...");
+    await fetchActiveConfig();
     triggerSaveSuccess();
   };
 
@@ -401,6 +412,7 @@ CLOUD_API_SECRET=${cloudinary.apiSecret}
             { id: "mongodb", label: "MongoDB Configs", icon: <Database size={18} /> },
             { id: "firebase", label: "Firebase Settings", icon: <Flame size={18} /> },
             { id: "cloudinary", label: "Cloudinary Settings", icon: <Sparkles size={18} /> },
+            { id: "gemini", label: "Gemini AI Settings", icon: <Sparkles size={18} /> },
             { id: "dotenv", label: ".env Sync Hub", icon: <Code size={18} /> }
           ].map((tab) => (
             <button
@@ -484,7 +496,7 @@ CLOUD_API_SECRET=${cloudinary.apiSecret}
               </div>
 
               {/* Dynamic Console Logs */}
-              <div className="flex-1 flex flex-col bg-slate-950 text-slate-350 p-6 rounded-2xl font-mono text-xs border border-slate-900 min-h-[220px]">
+              <div className="flex-1 flex flex-col bg-slate-950 text-slate-300 p-6 rounded-2xl font-mono text-xs border border-slate-900 min-h-[220px]">
                 <div className="flex items-center justify-between border-b border-slate-900 pb-3 mb-4 text-slate-500">
                   <div className="flex items-center gap-2">
                     <Terminal size={14} className="text-orange-500" />
@@ -779,6 +791,48 @@ CLOUD_API_SECRET=${cloudinary.apiSecret}
             </form>
           )}
 
+          {/* TAB 5: GEMINI AI CREDENTIALS */}
+          {activeTab === "gemini" && (
+            <form onSubmit={handleSaveGemini} className="space-y-6">
+              
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Sparkles className="text-amber-500" size={24} />
+                  Gemini AI Credentials
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Configure your Google Gemini API Key dynamically. Used securely on the backend to diagnose customer troubleshooting requests.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Gemini API Key</label>
+                  <input
+                    type="password"
+                    value={gemini.apiKey}
+                    onChange={(e) => setGemini({ ...gemini, apiKey: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
+                    placeholder="AIzaSy..."
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-gray-200/50 dark:border-slate-800/50 flex justify-end">
+                <button
+                  type="submit"
+                  className="bg-blue-900 dark:bg-orange-600 text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-blue-800 dark:hover:bg-orange-500 transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Save size={16} />
+                  Save Gemini Key
+                </button>
+              </div>
+
+            </form>
+          )}
+
           {/* TAB 4: .ENV SYNC HUB */}
           {activeTab === "dotenv" && (
             <div className="space-y-6 flex-1 flex flex-col">
@@ -819,7 +873,7 @@ CLOUD_API_SECRET=${cloudinary.apiSecret}
                   <span>Configured .env File Template</span>
                 </div>
 
-                <pre className="flex-1 overflow-auto text-slate-350 leading-relaxed scrollbar-thin whitespace-pre-wrap">
+                <pre className="flex-1 overflow-auto text-slate-300 leading-relaxed scrollbar-thin whitespace-pre-wrap">
                   {generateEnvString()}
                 </pre>
               </div>

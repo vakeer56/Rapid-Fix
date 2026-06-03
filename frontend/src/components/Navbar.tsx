@@ -14,6 +14,7 @@ const NAV_LINKS: NavLinkItem[] = [
   { label: "Home", href: "#home" },
   { label: "About", href: "#about" },
   { label: "How it Works", href: "#how-it-works" },
+  { label: "Community", href: "/community" },
 ];
 
 export default function Navbar() {
@@ -102,7 +103,7 @@ export default function Navbar() {
                                         className={`px-4 py-2 rounded-full font-semibold text-sm no-underline transition-all duration-300 ${
                                             isActive
                                                 ? "text-blue-900 dark:text-orange-500 bg-white/45 dark:bg-slate-900/45 backdrop-blur-[6px] border border-white/55 dark:border-slate-800/55 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.7),inset_0_-1px_1px_rgba(0,0,0,0.08),0_8px_16px_-4px_rgba(59,130,246,0.18)] dark:shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.18),0_8px_16px_-4px_rgba(249,115,22,0.18)]"
-                                                : "text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
+                                                : "text-slate-700 dark:text-slate-300 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
                                         }`}
                                     >
                                         {link.label}
@@ -113,7 +114,7 @@ export default function Navbar() {
                                         className={`px-4 py-2 rounded-full font-semibold text-sm no-underline transition-all duration-300 ${
                                             isActive
                                                 ? "text-blue-900 dark:text-orange-500 bg-white/45 dark:bg-slate-900/45 backdrop-blur-[6px] border border-white/55 dark:border-slate-800/55 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.7),inset_0_-1px_1px_rgba(0,0,0,0.08),0_8px_16px_-4px_rgba(59,130,246,0.18)] dark:shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.18),0_8px_16px_-4px_rgba(249,115,22,0.18)]"
-                                                : "text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
+                                                : "text-slate-700 dark:text-slate-300 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
                                         }`}
                                     >
                                         {link.label}
@@ -125,7 +126,7 @@ export default function Navbar() {
                                     className={`px-4 py-2 rounded-full font-semibold text-sm no-underline transition-all duration-300 ${
                                         isActive
                                             ? "text-blue-900 dark:text-orange-500 bg-white/45 dark:bg-slate-900/45 backdrop-blur-[6px] border border-white/55 dark:border-slate-800/55 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.7),inset_0_-1px_1px_rgba(0,0,0,0.08),0_8px_16px_-4px_rgba(59,130,246,0.18)] dark:shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.18),0_8px_16px_-4px_rgba(249,115,22,0.18)]"
-                                            : "text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
+                                            : "text-slate-700 dark:text-slate-300 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
                                     }`}
                                 >
                                     {link.label}
@@ -142,7 +143,7 @@ export default function Navbar() {
                             className={`px-4 py-2 rounded-full font-semibold text-sm no-underline transition-all duration-300 flex items-center gap-1.5 ${
                                 location.pathname === "/dashboard"
                                     ? "text-blue-900 dark:text-orange-500 bg-white/45 dark:bg-slate-900/45 backdrop-blur-[6px] border border-white/55 dark:border-slate-800/55 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.7),inset_0_-1px_1px_rgba(0,0,0,0.08),0_8px_16px_-4px_rgba(59,130,246,0.18)] dark:shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.18),0_8px_16px_-4px_rgba(249,115,22,0.18)]"
-                                    : "text-slate-700 dark:text-slate-350 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
+                                    : "text-slate-700 dark:text-slate-300 hover:text-blue-900 dark:hover:text-orange-500 border border-transparent"
                             }`}
                         >
                             <LayoutDashboard size={15} />
