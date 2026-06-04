@@ -208,6 +208,7 @@ const completeProfileController = async(req, res) => {
                 email,
                 phone,
                 authProvider: "twilio",
+                isPhoneVerified: true, // Verified via Twilio SMS OTP
             });
         }
 
@@ -457,6 +458,7 @@ const firebaseAuthController = async (req, res) => {
                     if (!account.categories || account.categories.length === 0) account.categories = uniqueCategories;
                     if (!account.phone) account.phone = phone;
                     if (!account.email && resolvedEmail) account.email = resolvedEmail;
+                    account.isEmailVerified = true; // Google signup/login automatically verifies email
                     await account.save();
                 } else {
                     account = await Worker.create({
@@ -472,6 +474,7 @@ const firebaseAuthController = async (req, res) => {
                         email: resolvedEmail || '',
                         firebaseUid: firebaseUser.uid,
                         authProvider: 'firebase',
+                        isEmailVerified: true, // Google signup/login automatically verifies email
                     });
                 }
             }
@@ -487,6 +490,7 @@ const firebaseAuthController = async (req, res) => {
                     if (!account.phone) account.phone = phone;
                     if (!account.email && resolvedEmail) account.email = resolvedEmail;
                     if (!account.photo && firebaseUser.picture) account.photo = firebaseUser.picture;
+                    account.isEmailVerified = true; // Google signup/login automatically verifies email
                     await account.save();
                 } else {
                     account = await User.create({
@@ -498,6 +502,8 @@ const firebaseAuthController = async (req, res) => {
                         firebaseUid: firebaseUser.uid,
                         authProvider: 'firebase',
                         photo: firebaseUser.picture || '',
+                        isEmailVerified: true, // Google signup/login automatically verifies email
+                        isPhoneVerified: false,
                     });
                 }
             }
@@ -532,13 +538,13 @@ const firebaseAuthController = async (req, res) => {
             });
         }
 
-        // Profile incomplete — return setup token and what we know from Firebase
         const setupToken = generateSetupToken({
             role: standardRole,
             firebaseUid: firebaseUser.uid,
             email: resolvedEmail,
             photo: firebaseUser.picture || '',
             needsProfile: true,
+            emailVerified: firebaseUser.email_verified || false,
         });
 
         return res.json({
@@ -619,6 +625,7 @@ const firebaseCompleteProfileController = async (req, res) => {
                 account.categories = uniqueCategories;
                 account.phone = phone;
                 if (!account.email && email) account.email = email;
+                account.isEmailVerified = true; // Google signup/login automatically verifies email
                 await account.save();
             } else {
                 account = await Worker.create({
@@ -634,6 +641,7 @@ const firebaseCompleteProfileController = async (req, res) => {
                     email: email || '',
                     firebaseUid,
                     authProvider: 'firebase',
+                    isEmailVerified: true, // Google signup/login automatically verifies email
                 });
             }
 
@@ -675,6 +683,7 @@ const firebaseCompleteProfileController = async (req, res) => {
                 user.phone = phone;
                 if (!user.email && email) user.email = email;
                 if (!user.photo && photo) user.photo = photo;
+                user.isEmailVerified = true; // Google signup/login automatically verifies email
                 await user.save();
             } else {
                 user = await User.create({
@@ -686,6 +695,8 @@ const firebaseCompleteProfileController = async (req, res) => {
                     firebaseUid,
                     authProvider: 'firebase',
                     photo: photo || '',
+                    isEmailVerified: true, // Google signup/login automatically verifies email
+                    isPhoneVerified: false,
                 });
             }
 
@@ -732,8 +743,18 @@ const updateProfileController = async (req, res) => {
             if (name !== undefined) worker.name = name;
             if (age !== undefined) worker.age = Number(age);
             if (gender !== undefined) worker.gender = gender;
-            if (phone !== undefined) worker.phone = phone;
-            if (email !== undefined) worker.email = email;
+            if (phone !== undefined) {
+                if (worker.phone !== phone) {
+                    worker.phone = phone;
+                    worker.isPhoneVerified = false;
+                }
+            }
+            if (email !== undefined) {
+                if (worker.email !== email) {
+                    worker.email = email;
+                    worker.isEmailVerified = false;
+                }
+            }
             if (experience !== undefined) worker.experience = Number(experience);
             if (located_address !== undefined) worker.located_address = located_address;
             
@@ -758,7 +779,10 @@ const updateProfileController = async (req, res) => {
             return res.json({
                 success: true,
                 message: 'Worker profile updated successfully',
-                user: worker,
+                user: {
+                    ...worker.toObject(),
+                    role: 'worker'
+                },
             });
         } else {
             const user = await User.findById(sub);
@@ -769,8 +793,18 @@ const updateProfileController = async (req, res) => {
             if (name !== undefined) user.name = name;
             if (age !== undefined) user.age = Number(age);
             if (gender !== undefined) user.gender = gender;
-            if (phone !== undefined) user.phone = phone;
-            if (email !== undefined) user.email = email;
+            if (phone !== undefined) {
+                if (user.phone !== phone) {
+                    user.phone = phone;
+                    user.isPhoneVerified = false;
+                }
+            }
+            if (email !== undefined) {
+                if (user.email !== email) {
+                    user.email = email;
+                    user.isEmailVerified = false;
+                }
+            }
 
             if (photo !== undefined && photo !== "") {
                 const uploadedPhotoUrl = await uploadWorkerPhoto(photo);
@@ -781,12 +815,75 @@ const updateProfileController = async (req, res) => {
             return res.json({
                 success: true,
                 message: 'Profile updated successfully',
-                user,
+                user: {
+                    ...user.toObject(),
+                    role: 'user'
+                },
             });
         }
     } catch (error) {
         console.error('[updateProfileController]', error);
         return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
+    }
+};
+
+const verifyWorkerPhoneController = async (req, res) => {
+    try {
+        const { sub, role } = req.user;
+        const { idToken } = req.body;
+
+        if (!idToken) {
+            return res.status(400).json({ success: false, message: "Firebase ID Token is required" });
+        }
+
+        const { verifyFirebaseToken } = require('../middleware/firebaseAdmin.middleware');
+        const firebaseUser = await verifyFirebaseToken(idToken);
+
+        if (!firebaseUser.phone_number) {
+            return res.status(400).json({ success: false, message: "No phone number found in Firebase token. Please complete verification." });
+        }
+
+        let account;
+        if (role === "worker") {
+            account = await Worker.findById(sub);
+        } else if (role === "user") {
+            account = await User.findById(sub);
+        } else {
+            // Fallback for mock tests/legacy: check Worker then User
+            account = await Worker.findById(sub);
+            if (!account) {
+                account = await User.findById(sub);
+            }
+        }
+
+        if (!account) {
+            return res.status(404).json({ success: false, message: `${role === "worker" ? "Worker" : "User"} not found` });
+        }
+
+        const firebasePhone = firebaseUser.phone_number.replace(/\D/g, "").slice(-10);
+        const dbPhone = account.phone.replace(/\D/g, "").slice(-10);
+
+        if (firebasePhone !== dbPhone) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Phone number mismatch. Firebase verified ${firebaseUser.phone_number}, but profile has ${account.phone}` 
+            });
+        }
+
+        account.isPhoneVerified = true;
+        await account.save();
+
+        return res.json({
+            success: true,
+            message: "Phone number verified successfully",
+            user: {
+                ...account.toObject(),
+                role
+            }
+        });
+    } catch (error) {
+        console.error("[verifyWorkerPhoneController] Error:", error);
+        return res.status(500).json({ success: false, message: "Verification failed: " + error.message });
     }
 };
 
@@ -1064,4 +1161,5 @@ module.exports = {
     syncAdminConfigController,
     getAdminConfigController,
     deleteAccountController,
+    verifyWorkerPhoneController,
 };

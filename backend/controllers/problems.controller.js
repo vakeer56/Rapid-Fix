@@ -113,6 +113,7 @@ exports.resolveProblem = async (req, res) => {
         const io = req.app?.get('socketio');
         if (io) {
             io.emit('problemResolved', { problemId });
+            io.emit('problemUpdated', { problemId });
         }
 
         return res.status(200).json({
@@ -150,7 +151,22 @@ exports.getUserProblems = async (req, res) => {
                 .populate('resolved_worker')
                 .sort({ createdAt: -1 });
         }
-        return res.json({ success: true, problems });
+
+        const Complaint = require('../model/complaint.model');
+        const problemsWithComplaints = await Promise.all(problems.map(async (problem) => {
+            const p = problem.toObject();
+            if (p.assigned_worker) {
+                const count = await Complaint.countDocuments({ worker_id: p.assigned_worker._id });
+                p.assigned_worker.complaintsCount = count;
+            }
+            if (p.resolved_worker) {
+                const count = await Complaint.countDocuments({ worker_id: p.resolved_worker._id });
+                p.resolved_worker.complaintsCount = count;
+            }
+            return p;
+        }));
+
+        return res.json({ success: true, problems: problemsWithComplaints });
     } catch (err) {
         return res.status(500).json({ success: false, message: err.message });
     }
@@ -168,6 +184,12 @@ exports.startProblemProgress = async (req, res) => {
         }
         problem.status = "in progress";
         await problem.save();
+
+        const io = req.app?.get('socketio');
+        if (io) {
+            io.emit('problemUpdated', { problemId });
+        }
+
         return res.status(200).json({ success: true, message: "Job is now in progress", problem });
     } catch (err) {
         return res.status(500).json({ message: err.message });

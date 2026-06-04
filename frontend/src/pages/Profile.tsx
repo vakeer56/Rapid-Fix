@@ -5,7 +5,7 @@ import Footer from "../components/Footer";
 import { useAuth } from "../context/AuthContext";
 import api from "../service/api";
 import { auth } from "../config/firebase";
-import { sendPasswordResetEmail } from "firebase/auth";
+import { sendPasswordResetEmail, RecaptchaVerifier, linkWithPhoneNumber } from "firebase/auth";
 import { 
   User, 
   Mail, 
@@ -100,6 +100,128 @@ export default function Profile() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+
+  // Phone Verification States
+  const [verificationStep, setVerificationStep] = useState<"idle" | "sending" | "otp_sent" | "verifying">("idle");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+  const [phoneError, setPhoneError] = useState("");
+  const [phoneSuccess, setPhoneSuccess] = useState("");
+
+  // Critical Edit Modal States
+  const [editingField, setEditingField] = useState<"phone" | "email" | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [editError, setEditError] = useState("");
+
+  const openEditModal = (field: "phone" | "email") => {
+    setEditingField(field);
+    setEditValue(form[field]);
+    setEditError("");
+  };
+
+  const handleConfirmEdit = () => {
+    setEditError("");
+    if (editingField === "phone") {
+      const cleanPhone = editValue.replace(/\D/g, "");
+      if (!/^\d{10}$/.test(cleanPhone)) {
+        setEditError("Please enter a valid 10-digit phone number.");
+        return;
+      }
+      setForm(f => ({ ...f, phone: cleanPhone }));
+    } else if (editingField === "email") {
+      const cleanEmail = editValue.trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        setEditError("Please enter a valid email address.");
+        return;
+      }
+      setForm(f => ({ ...f, email: cleanEmail }));
+    }
+    setEditingField(null);
+  };
+
+  const handleSendOTP = async () => {
+    setPhoneError("");
+    setPhoneSuccess("");
+    if (!/^\d{10}$/.test(form.phone)) {
+      setPhoneError("Please enter a valid 10-digit phone number first.");
+      return;
+    }
+    setVerificationStep("sending");
+    try {
+      const formatPhone = `+91${form.phone}`;
+      
+      // Clean up any old recaptcha container/verifier
+      const oldContainer = document.getElementById("recaptcha-container");
+      if (oldContainer) {
+        oldContainer.innerHTML = "";
+      }
+      
+      const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+        size: "invisible",
+      });
+      
+      if (!auth.currentUser) {
+        throw new Error("No active Firebase session found. Please re-login.");
+      }
+      
+      const confirmation = await linkWithPhoneNumber(auth.currentUser, formatPhone, verifier);
+      setConfirmationResult(confirmation);
+      setVerificationStep("otp_sent");
+      setPhoneSuccess(`Verification code sent to +91 ${form.phone}!`);
+    } catch (err: any) {
+      console.error("Error sending OTP:", err);
+      let msg = err.message || "Failed to send verification code.";
+      if (err.code === "auth/credential-already-in-use") {
+        msg = "This phone number is already linked to another worker profile.";
+      } else if (err.code === "auth/invalid-phone-number") {
+        msg = "Invalid phone number format.";
+      }
+      setPhoneError(msg);
+      setVerificationStep("idle");
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    setPhoneError("");
+    setPhoneSuccess("");
+    if (!/^\d{6}$/.test(verificationCode)) {
+      setPhoneError("Please enter a valid 6-digit OTP.");
+      return;
+    }
+    setVerificationStep("verifying");
+    try {
+      if (!confirmationResult) {
+        throw new Error("No active verification session found. Please request a new code.");
+      }
+      
+      await confirmationResult.confirm(verificationCode);
+      
+      const idToken = await auth.currentUser?.getIdToken(true);
+      if (!idToken) {
+        throw new Error("Failed to retrieve updated credentials from Firebase.");
+      }
+      
+      const res = await api.put("/auth/verify-phone", { idToken });
+      
+      if (res.data && res.data.success) {
+        setPhoneSuccess("Phone number verified successfully!");
+        setVerificationStep("idle");
+        setVerificationCode("");
+        setConfirmationResult(null);
+        
+        if (appToken && res.data.user) {
+          onAuthSuccess(appToken, res.data.user);
+        }
+      } else {
+        throw new Error(res.data.message || "Failed to verify phone on server.");
+      }
+    } catch (err: any) {
+      console.error("Error verifying OTP:", err);
+      setPhoneError(err.message || "Invalid OTP code. Please try again.");
+      setVerificationStep("otp_sent");
+    }
+  };
 
   const handleDeleteAccount = async () => {
     if (!deleteConfirmation) return;
@@ -540,36 +662,138 @@ export default function Profile() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Email Address</label>
-                    <div className="relative">
-                      <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="email"
-                        value={form.email}
-                        onChange={setField("email")}
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
-                        required
-                      />
+                    <div className="flex items-center gap-2 mb-1.5 ml-0.5">
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">Email Address</label>
+                      {form.email === appUser?.email && appUser?.isEmailVerified ? (
+                        <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-500/20 whitespace-nowrap shrink-0">
+                          <CheckCircle size={10} /> Verified
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-500/20 whitespace-nowrap shrink-0">
+                          <ShieldAlert size={10} /> Pending Verification
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="relative flex-grow">
+                        <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="email"
+                          value={form.email}
+                          readOnly
+                          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 placeholder-slate-400 outline-none transition-all text-sm select-none"
+                          required
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openEditModal("email")}
+                        className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer select-none shrink-0"
+                      >
+                        Edit
+                      </button>
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Phone</label>
-                    <div className="relative">
-                      <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="tel"
-                        value={form.phone}
-                        onChange={(e) => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
-                        required
-                      />
+                  <div className="col-span-3 sm:col-span-2">
+                    <div className="flex items-center gap-2 mb-1.5 ml-0.5">
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">Phone</label>
+                      {form.phone === appUser?.phone && appUser?.isPhoneVerified ? (
+                        <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-500/20 whitespace-nowrap shrink-0">
+                          <CheckCircle size={10} /> Verified
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-500/20 whitespace-nowrap shrink-0">
+                          <ShieldAlert size={10} /> Pending Verification
+                        </span>
+                      )}
                     </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative flex-grow">
+                        <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="tel"
+                          value={form.phone}
+                          readOnly
+                          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 placeholder-slate-400 outline-none transition-all text-sm select-none"
+                          required
+                        />
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal("phone")}
+                          className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer select-none shrink-0"
+                        >
+                          Edit
+                        </button>
+                        {(form.phone !== appUser?.phone || !appUser?.isPhoneVerified) && (
+                          <button
+                            type="button"
+                            onClick={handleSendOTP}
+                            disabled={verificationStep !== "idle" || form.phone.length !== 10}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1 shrink-0 cursor-pointer whitespace-nowrap"
+                          >
+                            {verificationStep === "sending" ? (
+                              <>
+                                <Loader2 size={12} className="animate-spin" />
+                                Sending...
+                              </>
+                            ) : (
+                              "Verify via SMS"
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div id="recaptcha-container" className="mt-2"></div>
+
+                    {phoneError && (
+                      <p className="text-xs text-rose-500 mt-2 font-medium bg-rose-500/10 px-3 py-2 rounded-xl border border-rose-500/20">
+                        {phoneError}
+                      </p>
+                    )}
+                    {phoneSuccess && (
+                      <p className="text-xs text-emerald-500 mt-2 font-medium bg-emerald-500/10 px-3 py-2 rounded-xl border border-emerald-500/20">
+                        {phoneSuccess}
+                      </p>
+                    )}
+
+                    {(verificationStep === "otp_sent" || verificationStep === "verifying") && (
+                      <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl animate-fade-in">
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                          Enter 6-Digit SMS Verification Code
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            maxLength={6}
+                            placeholder="Enter Code"
+                            value={verificationCode}
+                            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                            className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 w-full text-center tracking-widest font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleVerifyOTP}
+                            disabled={verificationStep === "verifying" || verificationCode.length !== 6}
+                            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                          >
+                            {verificationStep === "verifying" ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              "Verify Code"
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div>
+                  <div className="col-span-3 sm:col-span-1">
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Age</label>
                     <div className="relative">
                       <Calendar size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -585,7 +809,7 @@ export default function Profile() {
                     </div>
                   </div>
 
-                  <div>
+                  <div className="col-span-3 sm:col-span-1">
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Gender</label>
                     <div className="relative">
                       <Users size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1024,6 +1248,65 @@ export default function Profile() {
           </div>
         </div>
       </main>
+
+      {/* Critical Edit Modal Popup */}
+      {editingField && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
+          <div className="glass-panel rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative overflow-hidden animate-scale-up border border-slate-700/40 bg-slate-900/90">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <ShieldAlert className="text-orange-500" size={20} />
+              Update {editingField === "email" ? "Email Address" : "Phone Number"}
+            </h3>
+            
+            <p className="text-xs text-slate-400 leading-relaxed mb-4">
+              Changing your registered {editingField === "email" ? "email" : "phone number"} is a critical action. 
+              Doing so will reset its verification status, and you will need to verify the new credentials.
+            </p>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  New {editingField === "email" ? "Email Address" : "Phone Number"}
+                </label>
+                <input
+                  type={editingField === "email" ? "email" : "text"}
+                  value={editValue}
+                  onChange={(e) => setEditValue(
+                    editingField === "phone" 
+                      ? e.target.value.replace(/\D/g, "").slice(0, 10) 
+                      : e.target.value
+                  )}
+                  placeholder={editingField === "email" ? "name@example.com" : "10-digit number"}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-white placeholder-slate-500 focus:ring-2 focus:ring-orange-500 outline-none transition-all text-sm font-medium"
+                />
+              </div>
+
+              {editError && (
+                <div className="text-xs text-rose-500 bg-rose-500/10 border border-rose-500/20 px-3.5 py-2.5 rounded-xl font-medium">
+                  {editError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingField(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer select-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmEdit}
+                className="px-5 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer select-none active:scale-95 transition-all"
+              >
+                Confirm Change
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>

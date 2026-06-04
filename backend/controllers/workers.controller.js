@@ -34,6 +34,11 @@ const workerAcceptProblem = async (req, res) => {
                 $addToSet: { accepted_problems: problemId } // avoids duplicates
             }
         );
+        const io = req.app?.get('socketio');
+        if (io) {
+            io.emit('problemUpdated', { problemId });
+        }
+
         return res.status(200).json({
             success: true,
             message: "Problem accepted successfully",
@@ -73,6 +78,11 @@ const userRejectWorker = async (req, res) => {
             $pull: { accepted_problems: problemId }
         });
 
+        const io = req.app?.get('socketio');
+        if (io) {
+            io.emit('problemUpdated', { problemId });
+        }
+
         return res.status(200).json({
             success: true,
             message: "Worker rejected",
@@ -107,6 +117,11 @@ const userAcceptWorker = async (req, res) => {
         // await workers.findByIdAndUpdate(workerId, {
         //     $addToSet: { accepted_problems: problemId }
         // });//?
+
+        const io = req.app?.get('socketio');
+        if (io) {
+            io.emit('problemUpdated', { problemId });
+        }
 
         return res.status(200).json({
             success: true,

@@ -28,6 +28,7 @@ export interface AppUser {
   preferred_areas?: string[];
   photo?: string;
   verificationStatus?: boolean;
+  isPhoneVerified?: boolean;
   firebaseUid: string;
   categories?: string[];
 }

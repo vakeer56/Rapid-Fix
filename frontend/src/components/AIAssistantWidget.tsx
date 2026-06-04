@@ -54,11 +54,6 @@ export default function AIAssistantWidget() {
   const { showConfirm } = usePopup();
   const navigate = useNavigate();
 
-  // Hide the AI Assistant widget for service partners (workers)
-  if (appUser?.role === "worker") {
-    return null;
-  }
-
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -108,6 +103,11 @@ export default function AIAssistantWidget() {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, loading]);
+
+  // Hide the AI Assistant widget for service partners (workers)
+  if (appUser?.role === "worker") {
+    return null;
+  }
 
   const handleClearChat = async () => {
     const confirmClear = await showConfirm(

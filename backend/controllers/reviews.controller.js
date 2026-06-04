@@ -87,12 +87,15 @@ const getWorkerReviews = async (req, res) => {
             .sort({ createdAt: -1 });
 
         const worker = await workersSchema.findById(workerId, "rating experience");
+        const complaintsSchema = require('../model/complaint.model');
+        const complaintsCount = await complaintsSchema.countDocuments({ worker_id: workerId });
 
         return res.json({
             success: true,
             reviews,
             rating: worker?.rating || { totalSum: 0, totalCount: 0 },
-            experience: worker?.experience || 0
+            experience: worker?.experience || 0,
+            complaintsCount: complaintsCount || 0
         });
     } catch (error) {
         console.error("[getWorkerReviews]", error);

@@ -44,6 +44,14 @@ const userSchema = new Schema({
     photo: {
         type: String,
         default: ""
+    },
+    isEmailVerified: {
+        type: Boolean,
+        default: false
+    },
+    isPhoneVerified: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true })
 

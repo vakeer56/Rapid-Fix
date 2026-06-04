@@ -19,6 +19,7 @@ import {
   Video, 
   Briefcase,
   ShieldCheck,
+  ShieldAlert,
   Star,
   Zap,
   Check,
@@ -79,7 +80,7 @@ interface ProblemRequest {
 
 export default function Dashboard() {
   const { appUser } = useAuth();
-  const { showAlert } = usePopup();
+  const { showAlert, showConfirm } = usePopup();
   
   // Customer states
   const [requests, setRequests] = useState<ProblemRequest[]>([]);
@@ -88,12 +89,17 @@ export default function Dashboard() {
   const [problemOpen, setProblemOpen] = useState(false);
 
   // Worker-specific states
-  const [activeTab, setActiveTab] = useState<"available" | "active">("available");
+  const [activeTab, setActiveTab] = useState<"available" | "active" | "completed" | "reviews" | "complaints">("available");
   const [availableJobs, setAvailableJobs] = useState<ProblemRequest[]>([]);
   const [activeAssignments, setActiveAssignments] = useState<ProblemRequest[]>([]);
   const [availableLoading, setAvailableLoading] = useState(false);
   const [availableError, setAvailableError] = useState("");
   const [claimLoadingId, setClaimLoadingId] = useState<string | null>(null);
+  const [workerComplaints, setWorkerComplaints] = useState<any[]>([]);
+  const [complaintsLoading, setComplaintsLoading] = useState(false);
+  const [newComplaintPopup, setNewComplaintPopup] = useState<any | null>(null);
+  const [ownReviews, setOwnReviews] = useState<any[]>([]);
+  const [ownReviewsLoading, setOwnReviewsLoading] = useState(false);
 
   // Worker Payout completion modal states
   const [completingProblemId, setCompletingProblemId] = useState<string | null>(null);
@@ -109,6 +115,13 @@ export default function Dashboard() {
   const [reviewText, setReviewText] = useState<string>("");
   const [reviewLoading, setReviewLoading] = useState<boolean>(false);
   const [reviewSuccess, setReviewSuccess] = useState<boolean>(false);
+
+  // Complaint Modal states
+  const [complainingProblem, setComplainingProblem] = useState<ProblemRequest | null>(null);
+  const [complaintTitle, setComplaintTitle] = useState<string>("");
+  const [complaintDescription, setComplaintDescription] = useState<string>("");
+  const [complaintLoading, setComplaintLoading] = useState<boolean>(false);
+  const [complaintSuccess, setComplaintSuccess] = useState<boolean>(false);
 
   // Worker Reviews History & Rated Workers states
   const [ratedWorkers, setRatedWorkers] = useState<string[]>([]);
@@ -142,7 +155,8 @@ export default function Dashboard() {
             return {
               ...prev,
               rating: res.data.rating,
-              experience: res.data.experience ?? prev.experience
+              experience: res.data.experience ?? prev.experience,
+              complaintsCount: res.data.complaintsCount ?? prev.complaintsCount
             };
           });
         }
@@ -154,11 +168,43 @@ export default function Dashboard() {
     }
   };
 
+  const fetchWorkerComplaints = async () => {
+    if (!appUser || appUser.role !== "worker") return;
+    setComplaintsLoading(true);
+    try {
+      const res = await api.get("/complaints/worker-complaints");
+      if (res.data && res.data.success) {
+        setWorkerComplaints(res.data.complaints || []);
+      }
+    } catch (err) {
+      console.error("Worker complaints fetch failed:", err);
+    } finally {
+      setComplaintsLoading(false);
+    }
+  };
+
+  const fetchOwnReviews = async () => {
+    if (!appUser || appUser.role !== "worker") return;
+    setOwnReviewsLoading(true);
+    try {
+      const res = await api.get(`/reviews/worker/${appUser._id}`);
+      if (res.data && res.data.success) {
+        setOwnReviews(res.data.reviews || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch worker reviews:", err);
+    } finally {
+      setOwnReviewsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (appUser) {
       if (appUser.role === "worker") {
         fetchAvailableJobs();
         fetchActiveAssignments();
+        fetchWorkerComplaints();
+        fetchOwnReviews();
       } else {
         fetchRequests();
         fetchRatedWorkers();
@@ -171,10 +217,22 @@ export default function Dashboard() {
   useEffect(() => {
     if (!appUser) return;
 
-    const socketUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-    const socket = io(socketUrl);
+    const getSocketURL = () => {
+      if (import.meta.env.VITE_API_BASE_URL) {
+        return import.meta.env.VITE_API_BASE_URL;
+      }
+      const protocol = window.location.protocol;
+      const hostname = window.location.hostname;
+      return `${protocol}//${hostname}:3000`;
+    };
 
-    console.log(`[Socket] Connecting to server at ${socketUrl}...`);
+    const socketUrl = getSocketURL();
+    const socket = io(socketUrl, {
+      transports: ["websocket"],
+      autoConnect: true
+    });
+
+    console.log(`[Socket] Connecting to server at ${socketUrl} using transports: ['websocket']...`);
 
     socket.on("connect", () => {
       console.log(`[Socket] Connected with ID: ${socket.id}`);
@@ -186,10 +244,29 @@ export default function Dashboard() {
         console.log("[Socket] Real-time Notification: New request raised!", problem);
         fetchAvailableJobs();
       });
+      // Listen for updates on existing problems
+      socket.on("problemUpdated", (data) => {
+        console.log("[Socket] Real-time Notification: Problem updated!", data);
+        fetchAvailableJobs();
+        fetchActiveAssignments();
+      });
+      // Listen for complaint raised about this worker
+      socket.on("complaintReceived", (data) => {
+        console.log("[Socket] Real-time Notification: Complaint received!", data);
+        if (data.worker_id === appUser._id) {
+          setNewComplaintPopup(data.complaint);
+          fetchWorkerComplaints();
+        }
+      });
     } else {
       // Listen for resolved problems
       socket.on("problemResolved", (data) => {
         console.log("[Socket] Real-time Notification: Request marked completed/resolved!", data);
+        fetchRequests();
+      });
+      // Listen for updates on existing problems
+      socket.on("problemUpdated", (data) => {
+        console.log("[Socket] Real-time Notification: Problem updated!", data);
         fetchRequests();
       });
     }
@@ -355,6 +432,54 @@ export default function Dashboard() {
       await showAlert("Review Error", err?.response?.data?.message || "Failed to submit review.", "error");
     } finally {
       setReviewLoading(false);
+    }
+  };
+
+  const handleComplaintSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appUser?._id || !complainingProblem) return;
+    const activeWorker = complainingProblem.assigned_worker || complainingProblem.resolved_worker;
+    if (!activeWorker) return;
+
+    setComplaintLoading(true);
+    try {
+      const res = await api.post("/complaints/add", {
+        problemId: complainingProblem._id,
+        workerId: activeWorker._id,
+        title: complaintTitle,
+        description: complaintDescription
+      });
+      if (res.status === 201) {
+        setComplaintSuccess(true);
+        setTimeout(() => {
+          setComplainingProblem(null);
+          setComplaintTitle("");
+          setComplaintDescription("");
+          setComplaintSuccess(false);
+        }, 1500);
+      }
+    } catch (err: any) {
+      await showAlert("Complaint Error", err?.response?.data?.message || "Failed to submit complaint.", "error");
+    } finally {
+      setComplaintLoading(false);
+    }
+  };
+
+  const handleDisputeComplaint = async (complaintId: string) => {
+    const confirm = await showConfirm(
+      "Report False Dispute",
+      "Are you sure you want to report this complaint as false to the administrator? An admin will review it and verify with the client."
+    );
+    if (!confirm) return;
+
+    try {
+      const res = await api.put(`/complaints/dispute/${complaintId}`);
+      if (res.data && res.data.success) {
+        await showAlert("Dispute Registered", "Your dispute request has been submitted to the admin for review.", "success");
+        fetchWorkerComplaints();
+      }
+    } catch (err: any) {
+      await showAlert("Dispute Error", err?.response?.data?.message || "Failed to submit dispute.", "error");
     }
   };
 
@@ -563,31 +688,66 @@ export default function Dashboard() {
           {/* Right Panel: Tabs, Feeds and Task Center */}
           <div className="w-full lg:w-2/3 flex flex-col gap-6">
             {/* Sliding Pill Tab Switcher */}
-            <div className="glass-panel rounded-2xl p-1.5 flex shadow-xl relative z-10 select-none">
+            <div className="glass-panel rounded-2xl p-1.5 flex shadow-xl relative z-10 select-none flex-nowrap overflow-hidden">
               <div 
                 className="absolute top-1.5 bottom-1.5 bg-orange-600 rounded-xl transition-all duration-300"
                 style={{
-                  left: activeTab === "available" ? "6px" : "50%",
-                  right: activeTab === "available" ? "50%" : "6px",
+                  left: activeTab === "available" ? "6px" 
+                        : activeTab === "active" ? "20%" 
+                        : activeTab === "completed" ? "40%" 
+                        : activeTab === "reviews" ? "60%" 
+                        : "80%",
+                  right: activeTab === "available" ? "80%" 
+                         : activeTab === "active" ? "60%" 
+                         : activeTab === "completed" ? "40%" 
+                         : activeTab === "reviews" ? "20%" 
+                         : "6px",
                 }}
               />
               <button
                 type="button"
                 onClick={() => setActiveTab("available")}
-                className={`flex-1 text-center py-2.5 rounded-xl font-bold text-sm z-10 transition-colors duration-200 cursor-pointer ${
+                className={`flex-1 text-center py-2.5 rounded-xl font-bold text-[10px] sm:text-xs z-10 transition-colors duration-200 cursor-pointer ${
                   activeTab === "available" ? "text-white" : "text-slate-400 hover:text-slate-200"
                 }`}
               >
-                Available Dispatch Feed ({availableJobs.length})
+                Available Feed ({availableJobs.length})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("active")}
-                className={`flex-1 text-center py-2.5 rounded-xl font-bold text-sm z-10 transition-colors duration-200 cursor-pointer ${
+                className={`flex-1 text-center py-2.5 rounded-xl font-bold text-[10px] sm:text-xs z-10 transition-colors duration-200 cursor-pointer ${
                   activeTab === "active" ? "text-white" : "text-slate-400 hover:text-slate-200"
                 }`}
               >
-                Claimed Repair Track ({activeAssignments.length})
+                Active ({activeAssignments.filter(a => a.status !== "resolved" && a.status !== "completed").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("completed")}
+                className={`flex-1 text-center py-2.5 rounded-xl font-bold text-[10px] sm:text-xs z-10 transition-colors duration-200 cursor-pointer ${
+                  activeTab === "completed" ? "text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Completed ({activeAssignments.filter(a => a.status === "resolved" || a.status === "completed").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("reviews")}
+                className={`flex-1 text-center py-2.5 rounded-xl font-bold text-[10px] sm:text-xs z-10 transition-colors duration-200 cursor-pointer ${
+                  activeTab === "reviews" ? "text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Reviews ({ownReviews.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("complaints")}
+                className={`flex-1 text-center py-2.5 rounded-xl font-bold text-[10px] sm:text-xs z-10 transition-colors duration-200 cursor-pointer ${
+                  activeTab === "complaints" ? "text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Complaints ({workerComplaints.length})
               </button>
             </div>
 
@@ -748,7 +908,7 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : activeTab === "active" ? (
               // Claimed Repair Assignments Center
               <div className="space-y-6">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -775,27 +935,32 @@ export default function Dashboard() {
                     <h3 className="font-bold text-base mb-1">Retrieval Failed</h3>
                     <p className="text-xs">{error}</p>
                   </div>
-                ) : activeAssignments.length === 0 ? (
-                  /* Elegant Empty State */
-                  <div className="glass-panel rounded-3xl p-12 text-center shadow-xl max-w-xl mx-auto flex flex-col items-center">
-                    <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mb-5">
-                      <Wrench className="w-7 h-7 text-slate-500" />
-                    </div>
-                    <h3 className="text-lg font-bold text-white mb-1.5">No Active Assignments</h3>
-                    <p className="text-slate-400 text-xs max-w-sm leading-relaxed mb-6">
-                      You are not currently tracking any claimed customer requests. Claim a request from the Dispatch feed to start repairing immediately.
-                    </p>
-                    <button
-                      onClick={() => setActiveTab("available")}
-                      className="bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
-                    >
-                      View Available Dispatches
-                    </button>
-                  </div>
-                ) : (
-                  /* Cards Feed */
-                  <div className="grid grid-cols-1 gap-6">
-                    {activeAssignments.map((assignment) => (
+                ) : (() => {
+                  const activeJobsList = activeAssignments.filter(a => a.status !== "resolved" && a.status !== "completed");
+                  if (activeJobsList.length === 0) {
+                    return (
+                      /* Elegant Empty State */
+                      <div className="glass-panel rounded-3xl p-12 text-center shadow-xl max-w-xl mx-auto flex flex-col items-center">
+                        <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mb-5">
+                          <Wrench className="w-7 h-7 text-slate-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-1.5">No Active Assignments</h3>
+                        <p className="text-slate-400 text-xs max-w-sm leading-relaxed mb-6">
+                          You are not currently tracking any active claimed requests. Claim a request from the Dispatch feed to start repairing immediately.
+                        </p>
+                        <button
+                          onClick={() => setActiveTab("available")}
+                          className="bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+                        >
+                          View Available Dispatches
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    /* Cards Feed */
+                    <div className="grid grid-cols-1 gap-6">
+                      {activeJobsList.map((assignment) => (
                       <div 
                         key={assignment._id}
                         className={`glass-panel rounded-3xl transition-all duration-300 p-6 flex flex-col sm:flex-row justify-between gap-6 hover:shadow-xl hover:-translate-y-0.5 ${
@@ -944,6 +1109,256 @@ export default function Dashboard() {
                                 </span>
                               )}
                             </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+              </div>
+            ) : activeTab === "completed" ? (
+              // Completed Repair Assignments Center
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-white">
+                    <CheckCircle2 className="text-emerald-500" size={20} />
+                    Completed Repair Archive
+                  </h3>
+                  <button 
+                    onClick={fetchActiveAssignments} 
+                    className="text-xs text-orange-400 hover:text-orange-300 font-bold transition-all hover:underline"
+                  >
+                    Refresh Archive
+                  </button>
+                </div>
+
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-24">
+                    <Loader2 size={36} className="animate-spin text-orange-500 mb-4" />
+                    <p className="text-slate-400 text-xs font-semibold">Loading archive…</p>
+                  </div>
+                ) : error ? (
+                  <div className="bg-red-950/20 border border-red-900 rounded-3xl p-8 text-center text-red-400 max-w-lg mx-auto">
+                    <AlertCircle size={36} className="mx-auto mb-3" />
+                    <h3 className="font-bold text-base mb-1">Retrieval Failed</h3>
+                    <p className="text-xs">{error}</p>
+                  </div>
+                ) : (() => {
+                  const completedJobsList = activeAssignments.filter(a => a.status === "resolved" || a.status === "completed");
+                  if (completedJobsList.length === 0) {
+                    return (
+                      <div className="glass-panel rounded-3xl p-12 text-center shadow-xl max-w-xl mx-auto flex flex-col items-center">
+                        <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mb-5">
+                          <CheckCircle2 className="w-7 h-7 text-slate-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-1.5">No Completed Jobs</h3>
+                        <p className="text-slate-400 text-xs max-w-sm leading-relaxed">
+                          You have not resolved any repair requests yet. Complete active jobs from your track list to start building your record!
+                        </p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="grid grid-cols-1 gap-6">
+                      {completedJobsList.map((assignment) => (
+                        <div 
+                          key={assignment._id}
+                          className="glass-panel rounded-3xl transition-all duration-300 p-6 flex flex-col sm:flex-row justify-between gap-6 hover:shadow-xl hover:-translate-y-0.5"
+                        >
+                          <div className="flex-grow space-y-4">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-bold text-lg text-white line-clamp-1">{assignment.name}</h4>
+                                {getCategoryBadge(assignment.category)}
+                                {getStatusBadge(assignment.status)}
+                              </div>
+                              <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+                                {assignment.description}
+                              </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                              <div className="flex items-center gap-2.5 text-xs font-bold text-slate-350">
+                                <MapPin size={15} className="text-orange-500" />
+                                <span>{assignment.address?.addressLine || "Address not provided"}</span>
+                              </div>
+                              <div className="flex items-center gap-2.5 text-xs font-bold text-slate-350">
+                                <Calendar size={15} className="text-orange-500" />
+                                <span>Completed on: {new Date(assignment.updatedAt).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 flex flex-col justify-center w-full sm:w-48">
+                            <div className="flex flex-col gap-1 text-center py-3 px-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-xs">
+                              <div className="flex items-center justify-center gap-1">
+                                <CheckCircle2 size={14} />
+                                Completed
+                              </div>
+                              {assignment.amountReceived !== undefined && assignment.amountReceived > 0 && (
+                                <span className="text-[10px] text-slate-350 mt-0.5 font-extrabold block">
+                                  Payout: ₹{assignment.amountReceived}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : activeTab === "reviews" ? (
+              // Received Reviews Center
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-white">
+                    <Star className="text-amber-500 fill-amber-500 animate-pulse" size={20} />
+                    Client Rating & Reviews History
+                  </h3>
+                  <button 
+                    onClick={fetchOwnReviews} 
+                    className="text-xs text-orange-400 hover:text-orange-300 font-bold transition-all hover:underline"
+                  >
+                    Refresh Reviews
+                  </button>
+                </div>
+
+                {ownReviewsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-24">
+                    <Loader2 size={36} className="animate-spin text-orange-500 mb-4" />
+                    <p className="text-slate-400 text-xs font-semibold">Loading reviews…</p>
+                  </div>
+                ) : ownReviews.length === 0 ? (
+                  <div className="glass-panel rounded-3xl p-12 text-center shadow-xl max-w-xl mx-auto flex flex-col items-center">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mb-5">
+                      <Star className="w-7 h-7 text-slate-500" />
+                    </div>
+                    <h3 className="text-lg font-bold text-white mb-1.5">No Reviews Yet</h3>
+                    <p className="text-slate-400 text-xs max-w-sm leading-relaxed">
+                      You haven't received any client ratings or reviews yet. Complete your repair requests and ask customers to rate your work!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {ownReviews.map((rev) => (
+                      <div 
+                        key={rev._id} 
+                        className="glass-panel rounded-3xl p-5 border border-slate-800/40 hover:border-slate-800 transition-all hover:shadow-lg space-y-3"
+                      >
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center text-[10px] font-bold text-white uppercase border border-slate-700">
+                              {rev.user_id?.photo ? (
+                                <img src={rev.user_id.photo} alt={rev.user_id.name} className="w-full h-full object-cover" />
+                              ) : (
+                                rev.user_id?.name?.[0]?.toUpperCase() || "C"
+                              )}
+                            </div>
+                            <span className="text-[11px] font-extrabold text-slate-200">{rev.user_id?.name || "Customer"}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-550 font-semibold">
+                            {rev.createdAt ? new Date(rev.createdAt).toLocaleDateString() : "Just now"}
+                          </span>
+                        </div>
+                        
+                        {/* Rating Stars */}
+                        <div className="flex gap-0.5">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              size={12}
+                              className={i < rev.rating ? "text-amber-400 fill-amber-400" : "text-slate-700"}
+                            />
+                          ))}
+                        </div>
+
+                        <p className="text-xs text-slate-350 leading-relaxed font-semibold italic">
+                          "{rev.discription}"
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Worker Complaints Log Section */
+              <div className="space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-white">
+                    <ShieldAlert className="text-red-500 animate-pulse" size={20} />
+                    Verified Safety & Feedback Complaints
+                  </h3>
+                  <button 
+                    onClick={fetchWorkerComplaints} 
+                    className="text-xs text-orange-400 hover:text-orange-300 font-bold transition-all hover:underline"
+                  >
+                    Refresh Complaints
+                  </button>
+                </div>
+
+                {complaintsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-24">
+                    <Loader2 size={36} className="animate-spin text-orange-500 mb-4" />
+                    <p className="text-slate-400 text-xs font-semibold">Loading safety logs…</p>
+                  </div>
+                ) : workerComplaints.length === 0 ? (
+                  <div className="glass-panel rounded-3xl p-12 text-center shadow-xl max-w-xl mx-auto flex flex-col items-center animate-fade-in">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-emerald-500 flex items-center justify-center mb-5 animate-bounce-slow">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-lg font-bold text-white mb-1.5">No Safety Complaints</h3>
+                    <p className="text-slate-400 text-xs max-w-sm leading-relaxed">
+                      Your profile has clean safety reports. Keep up the good work and maintain professional, reliable service for your customers!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {workerComplaints.map((complaint) => (
+                      <div 
+                        key={complaint._id}
+                        className="glass-panel rounded-3xl p-5 border border-red-500/10 hover:border-red-500/20 transition-all hover:shadow-lg flex flex-col gap-3 animate-fade-in"
+                      >
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                            <h4 className="font-bold text-sm text-slate-200">{complaint.title}</h4>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            {new Date(complaint.createdAt).toLocaleDateString()} at {new Date(complaint.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                          {complaint.description}
+                        </p>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-1">
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 bg-slate-950/40 px-3.5 py-2.5 rounded-xl border border-slate-900/60 flex-grow">
+                            <span className="flex items-center gap-1 font-bold text-rose-500/80">
+                              <ShieldAlert size={12} />
+                              Reported By:
+                            </span>
+                            <span className="font-bold text-slate-400 tracking-wide">Verified Client</span>
+                          </div>
+
+                          {complaint.status === "disputed" ? (
+                            <div className="flex items-center justify-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-500 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider h-full shrink-0 select-none animate-pulse">
+                              <AlertCircle size={12} />
+                              Dispute Pending Admin Review
+                            </div>
+                          ) : complaint.status === "revoked" ? (
+                            <div className="flex items-center justify-center gap-1 bg-rose-500/10 border border-rose-500/20 text-rose-500 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider h-full shrink-0 select-none">
+                              <ShieldAlert size={12} />
+                              Dispute Rejected by Admin
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleDisputeComplaint(complaint._id)}
+                              className="bg-red-950/30 hover:bg-red-950/50 border border-red-900/50 hover:border-red-900 text-red-400 font-bold px-4 py-2 rounded-xl text-[10px] transition-all cursor-pointer shrink-0 active:scale-95 text-center"
+                            >
+                              Report False (Dispute)
+                            </button>
                           )}
                         </div>
                       </div>
@@ -1240,52 +1655,87 @@ export default function Dashboard() {
                                     >
                                       View Rating & Review History →
                                     </button>
+                                    {activeWorker.complaintsCount !== undefined && (
+                                      <p className="text-[9px] font-bold mt-1 text-slate-500 dark:text-slate-400">
+                                        Complaints:{" "}
+                                        <span className={activeWorker.complaintsCount > 0 ? "text-red-500 font-extrabold" : "text-emerald-500 font-extrabold"}>
+                                          {activeWorker.complaintsCount} raised
+                                        </span>
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
                               </div>
                               {req.status !== "resolved" && (
-                                <a
-                                  href={`tel:${activeWorker.phone}`}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-blue-600 dark:text-orange-400 rounded-xl text-[10px] font-bold no-underline transition-colors shrink-0"
-                                >
-                                  <Phone size={11} />
-                                  Call Expert
-                                </a>
+                                <div className="flex gap-2 shrink-0">
+                                  <a
+                                    href={`tel:${activeWorker.phone}`}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-blue-600 dark:text-orange-400 rounded-xl text-[10px] font-bold no-underline transition-colors shrink-0"
+                                  >
+                                    <Phone size={11} />
+                                    Call Expert
+                                    {activeWorker.isPhoneVerified && (
+                                      <CheckCircle2 size={10} className="text-emerald-500 fill-emerald-500/10" />
+                                    )}
+                                  </a>
+                                  <button
+                                    onClick={() => setComplainingProblem(req)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-xl text-[10px] font-bold transition-colors shrink-0 cursor-pointer"
+                                  >
+                                    Report
+                                  </button>
+                                </div>
                               )}
                             </div>
                             
                             {req.status === "resolved" && (
-                              <div className="space-y-3">
-                                {/* Billing transparency */}
-                                <div className="bg-emerald-500/5 dark:bg-emerald-950/20 border border-emerald-500/10 dark:border-emerald-900/30 rounded-2xl p-4 text-[11px] space-y-2">
-                                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
-                                    <span className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[9px]">Total Amount Paid:</span>
-                                    <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">₹{req.amountReceived || 0}</span>
+                                <div className="space-y-3">
+                                  {/* Billing transparency */}
+                                  <div className="bg-emerald-500/5 dark:bg-emerald-950/20 border border-emerald-500/10 dark:border-emerald-900/30 rounded-2xl p-4 text-[11px] space-y-2">
+                                    <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                                      <span className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[9px]">Total Amount Paid:</span>
+                                      <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">₹{req.amountReceived || 0}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[10px] text-emerald-500 dark:text-emerald-400 border-t border-slate-200 dark:border-slate-800/80 pt-2 font-medium">
+                                      <span className="flex items-center gap-1">
+                                        <ShieldCheck size={12} />
+                                        Platform Fees: ₹0
+                                      </span>
+                                      <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">100% direct to specialist</span>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center justify-between text-[10px] text-emerald-500 dark:text-emerald-400 border-t border-slate-200 dark:border-slate-800/80 pt-2 font-medium">
-                                    <span className="flex items-center gap-1">
-                                      <ShieldCheck size={12} />
-                                      Platform Fees: ₹0
-                                    </span>
-                                    <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">100% direct to specialist</span>
-                                  </div>
-                                </div>
 
-                                {ratedWorkers.includes(activeWorker._id) ? (
-                                  <div className="w-full py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-[10px] flex items-center justify-center gap-1.5 select-none uppercase tracking-wider">
-                                    <ShieldCheck size={12} />
-                                    ✓ Service Partner Rated & Reviewed
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => setReviewingProblem(req)}
-                                    className="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-[10px] transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/10 cursor-pointer"
-                                  >
-                                    <Star size={11} className="fill-white" />
-                                    Rate & Review Expert
-                                  </button>
-                                )}
-                              </div>
+                                  {ratedWorkers.includes(activeWorker._id) ? (
+                                    <div className="flex gap-2 w-full">
+                                      <div className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-[10px] flex items-center justify-center gap-1.5 select-none uppercase tracking-wider">
+                                        <ShieldCheck size={12} />
+                                        ✓ Service Partner Rated & Reviewed
+                                      </div>
+                                      <button
+                                        onClick={() => setComplainingProblem(req)}
+                                        className="px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 font-bold text-[10px] transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                                      >
+                                        Report
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex gap-2 w-full">
+                                      <button
+                                        onClick={() => setReviewingProblem(req)}
+                                        className="flex-1 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-[10px] transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/10 cursor-pointer"
+                                      >
+                                        <Star size={11} className="fill-white" />
+                                        Rate & Review Expert
+                                      </button>
+                                      <button
+                                        onClick={() => setComplainingProblem(req)}
+                                        className="px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 font-bold text-[10px] transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                                      >
+                                        Report
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                             )}
                           </div>
                         );
@@ -1406,6 +1856,86 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* File Complaint Modal */}
+      {complainingProblem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
+          <div className="glass-panel rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative animate-scale-up">
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setComplainingProblem(null);
+                setComplaintTitle("");
+                setComplaintDescription("");
+                setComplaintSuccess(false);
+              }}
+              className="absolute right-4 top-4 text-slate-400 hover:text-white transition-colors border-none bg-transparent cursor-pointer outline-none"
+            >
+              <X size={20} />
+            </button>
+
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <ShieldAlert className="text-red-500 animate-pulse" size={22} />
+              File Complaint
+            </h3>
+            <p className="text-xs text-slate-400 mb-6 font-medium leading-relaxed">
+              Report an issue with <strong>{(complainingProblem.assigned_worker || complainingProblem.resolved_worker)?.name}</strong> for the job: "{complainingProblem.name}"
+            </p>
+
+            {complaintSuccess ? (
+              <div className="text-center py-6">
+                <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4 text-red-400 animate-bounce">
+                  <CheckCircle2 size={32} />
+                </div>
+                <h4 className="text-lg font-bold text-white mb-1">Complaint Submitted</h4>
+                <p className="text-xs text-slate-400">Your report has been logged and sent to administration.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleComplaintSubmit} className="space-y-6">
+                {/* Complaint Title */}
+                <div className="space-y-1.5">
+                  <label htmlFor="complaintTitle" className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Complaint Reason</label>
+                  <input
+                    type="text"
+                    id="complaintTitle"
+                    value={complaintTitle}
+                    onChange={(e) => setComplaintTitle(e.target.value)}
+                    placeholder="e.g. Arrived late, unprofessional behaviour, incorrect pricing..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 placeholder-slate-600 transition-all"
+                    required
+                  />
+                </div>
+
+                {/* Complaint Description */}
+                <div className="space-y-1.5">
+                  <label htmlFor="complaintDesc" className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Detailed Details</label>
+                  <textarea
+                    id="complaintDesc"
+                    rows={4}
+                    value={complaintDescription}
+                    onChange={(e) => setComplaintDescription(e.target.value)}
+                    placeholder="Provide a detailed explanation of what went wrong, including any relevant details..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 placeholder-slate-600 resize-none transition-all"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={complaintLoading}
+                  className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold py-3.5 rounded-2xl text-xs sm:text-sm tracking-wide transition-all active:scale-[0.98] shadow-lg shadow-red-500/10 hover:shadow-red-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {complaintLoading ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    "Submit Report"
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Worker Payout Modal */}
       {false && completingProblemId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
@@ -1507,6 +2037,14 @@ export default function Dashboard() {
                   <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500">Experience</h4>
                   <p className="text-xs font-bold text-white mt-1">{viewingWorkerReviews.experience || 0} Years In-field</p>
                 </div>
+                {viewingWorkerReviews.complaintsCount !== undefined && (
+                  <div className="border-l border-slate-800 pl-4 py-1">
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500">Complaints</h4>
+                    <p className={`text-xs font-black mt-1 ${viewingWorkerReviews.complaintsCount > 0 ? "text-red-500" : "text-emerald-500"}`}>
+                      {viewingWorkerReviews.complaintsCount} Raised
+                    </p>
+                  </div>
+                )}
               </div>
 
               <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-800/60 pb-1.5">Customer Reviews</h4>
@@ -1556,6 +2094,54 @@ export default function Dashboard() {
                 ))
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Persistent Worker Complaint Notification Modal */}
+      {newComplaintPopup && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 animate-fade-in">
+          {/* Backdrop overlay WITHOUT click handler to prevent accidental dismissals */}
+          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md" />
+          
+          <div className="relative w-full max-w-md bg-slate-900 border border-red-500/30 rounded-3xl p-6 shadow-2xl overflow-hidden animate-scale-up z-10 text-center flex flex-col items-center">
+            
+            {/* Pulsing warning indicator */}
+            <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 text-red-500 flex items-center justify-center mb-4 animate-pulse">
+              <ShieldAlert size={32} />
+            </div>
+
+            <h3 className="text-lg font-black text-white tracking-wide uppercase text-red-500">
+              Complaint Received
+            </h3>
+            
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mt-1 mb-4">
+              Verified Client Report
+            </p>
+
+            <div className="w-full bg-slate-950/60 border border-slate-850 rounded-2xl p-4 text-left mb-5 space-y-2">
+              <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">
+                {newComplaintPopup.title}
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {newComplaintPopup.description}
+              </p>
+              <div className="text-[9px] text-slate-650 font-semibold border-t border-slate-900 pt-1.5 flex justify-between items-center">
+                <span>Reporter:</span>
+                <span className="text-slate-400 font-bold">Verified Client</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 mb-6 leading-relaxed max-w-xs">
+              Please review this complaint in your profile. Maintain a safe, helpful, and highly professional community standard.
+            </p>
+
+            <button
+              onClick={() => setNewComplaintPopup(null)}
+              className="w-full py-3.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs uppercase tracking-wider rounded-2xl transition-all hover:shadow-lg shadow-red-500/20 cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+            >
+              Understood & Close
+            </button>
           </div>
         </div>
       )}

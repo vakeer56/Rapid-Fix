@@ -12,6 +12,7 @@ export interface AuthUser {
     preferred_areas?: string[];
     photo?: string;
     verificationStatus?: boolean;
+    isPhoneVerified?: boolean;
     firebaseUid?: string;
 }
 

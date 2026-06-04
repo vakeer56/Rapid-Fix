@@ -49,6 +49,14 @@ const workersSchema = new mongoose.Schema(
             type: Boolean,
             default: false
         },
+        isPhoneVerified: {
+            type: Boolean,
+            default: false
+        },
+        isEmailVerified: {
+            type: Boolean,
+            default: false
+        },
         accepted_problems:[
             {
             type: mongoose.Schema.Types.ObjectId,

@@ -12,6 +12,7 @@ const {
     syncAdminConfigController,
     getAdminConfigController,
     deleteAccountController,
+    verifyWorkerPhoneController,
 } = require("../controllers/auth.controller");
 
 
@@ -53,6 +54,9 @@ router.post('/firebase/complete-profile', requireSetupToken, firebaseCompletePro
 
 // Update user profile info
 router.put('/profile', authMiddleware, updateProfileController);
+
+// Verify worker phone number
+router.put('/verify-phone', authMiddleware, verifyWorkerPhoneController);
 
 // Public Firebase config retriever (safe, client-side credentials only)
 router.get('/firebase-config', getFirebaseConfigController);

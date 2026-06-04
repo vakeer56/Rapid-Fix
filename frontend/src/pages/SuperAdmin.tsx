@@ -15,9 +15,13 @@ import {
   Sparkles,
   ArrowLeft,
   Terminal,
-  Save
+  Save,
+  ShieldAlert,
+  Trash2,
+  Loader2
 } from "lucide-react";
 import api from "../service/api";
+import { usePopup } from "../context/PopupContext";
 
 
 interface MongoConfig {
@@ -48,6 +52,8 @@ interface GeminiConfig {
 }
 
 export default function SuperAdmin() {
+  const { showAlert, showConfirm } = usePopup();
+
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem("rf_super_admin_authenticated") === "true";
   });
@@ -56,7 +62,9 @@ export default function SuperAdmin() {
   const [adminError, setAdminError] = useState("");
   const [showAdminPass, setShowAdminPass] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "mongodb" | "firebase" | "cloudinary" | "gemini" | "dotenv">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "mongodb" | "firebase" | "cloudinary" | "gemini" | "dotenv" | "complaints">("dashboard");
+  const [adminComplaints, setAdminComplaints] = useState<any[]>([]);
+  const [complaintsLoading, setComplaintsLoading] = useState(false);
   
   // Initial configurations, will be dynamically populated from backend .env
   const [mongo, setMongo] = useState<MongoConfig>({
@@ -127,6 +135,62 @@ export default function SuperAdmin() {
     setAdminUsername("");
     setAdminPassword("");
   };
+
+  const fetchAdminComplaints = async () => {
+    setComplaintsLoading(true);
+    try {
+      const res = await api.get("/complaints/admin/all");
+      if (res.data && res.data.success) {
+        setAdminComplaints(res.data.complaints || []);
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch admin complaints:", err);
+    } finally {
+      setComplaintsLoading(false);
+    }
+  };
+
+  const handleDeleteComplaint = async (complaintId: string) => {
+    const confirm = await showConfirm(
+      "Cancel & Delete Complaint",
+      "Are you sure you want to permanently cancel and delete this complaint? This action is irreversible and will remove it from the worker's record."
+    );
+    if (!confirm) return;
+
+    try {
+      const res = await api.delete(`/complaints/admin/delete/${complaintId}`);
+      if (res.data && res.data.success) {
+        await showAlert("Complaint Cancelled", "The complaint has been successfully deleted from the database.", "success");
+        fetchAdminComplaints();
+      }
+    } catch (err: any) {
+      await showAlert("Deletion Error", err?.response?.data?.message || "Failed to delete complaint.", "error");
+    }
+  };
+
+  const handleRevokeDispute = async (complaintId: string) => {
+    const confirm = await showConfirm(
+      "Revoke Worker Dispute",
+      "Are you sure you want to revoke the dispute? This will reject the worker's false claim and keep the complaint active on their profile."
+    );
+    if (!confirm) return;
+
+    try {
+      const res = await api.put(`/complaints/admin/revoke-dispute/${complaintId}`);
+      if (res.data && res.data.success) {
+        await showAlert("Dispute Revoked", "The worker's dispute claim has been rejected. The complaint is active again.", "success");
+        fetchAdminComplaints();
+      }
+    } catch (err: any) {
+      await showAlert("Revoke Error", err?.response?.data?.message || "Failed to revoke dispute.", "error");
+    }
+  };
+
+  useEffect(() => {
+    if (isAdminAuthenticated && activeTab === "complaints") {
+      fetchAdminComplaints();
+    }
+  }, [isAdminAuthenticated, activeTab]);
 
   // Fetch configs from the server when authenticated
   useEffect(() => {
@@ -413,7 +477,8 @@ GEMINI_API_KEY=${gemini.apiKey}
             { id: "firebase", label: "Firebase Settings", icon: <Flame size={18} /> },
             { id: "cloudinary", label: "Cloudinary Settings", icon: <Sparkles size={18} /> },
             { id: "gemini", label: "Gemini AI Settings", icon: <Sparkles size={18} /> },
-            { id: "dotenv", label: ".env Sync Hub", icon: <Code size={18} /> }
+            { id: "dotenv", label: ".env Sync Hub", icon: <Code size={18} /> },
+            { id: "complaints", label: "Complaints Queue", icon: <ShieldAlert size={18} /> }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -885,6 +950,123 @@ GEMINI_API_KEY=${gemini.apiKey}
                 </p>
               </div>
 
+            </div>
+          )}
+
+          {/* TAB 5: COMPLAINTS QUEUE */}
+          {activeTab === "complaints" && (
+            <div className="space-y-6 flex-grow flex flex-col">
+              <div className="space-y-2 pb-4 border-b border-gray-200/50 dark:border-slate-800/50">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <ShieldAlert className="text-red-500 animate-pulse" size={24} />
+                  Complaints Review Queue
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Review claims filed against workers, contact reporting clients to verify details, and cancel complaints proved to be false or personal vengeance.
+                </p>
+              </div>
+
+              {complaintsLoading ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-16">
+                  <Loader2 className="animate-spin text-orange-500 mb-3" size={32} />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold">Retrieving complaints log…</p>
+                </div>
+              ) : adminComplaints.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-16 text-center max-w-sm mx-auto animate-fade-in">
+                  <CheckCircle className="text-green-500 mb-4 animate-bounce-slow" size={40} />
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Queue is Clear</h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+                    There are no active customer complaints filed in the database.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex-grow overflow-y-auto space-y-6 max-h-[60vh] pr-2 animate-fade-in">
+                  {adminComplaints.map((complaint) => (
+                    <div 
+                      key={complaint._id}
+                      className={`p-6 rounded-3xl bg-white dark:bg-slate-900/40 border ${
+                        complaint.status === "disputed" 
+                          ? "border-amber-500/40 shadow-amber-500/5 bg-amber-500/[0.02]" 
+                          : "border-gray-200 dark:border-slate-800"
+                      } flex flex-col gap-4 shadow-md transition-all hover:shadow-lg`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-150 dark:border-slate-800 pb-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            {complaint.status === "disputed" && (
+                              <span className="bg-amber-500/10 border border-amber-500/30 text-amber-500 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                Disputed (False Claim)
+                              </span>
+                            )}
+                            <h3 className="font-extrabold text-sm text-gray-900 dark:text-white uppercase tracking-wide">
+                              {complaint.title}
+                            </h3>
+                          </div>
+                          <p className="text-[10px] text-gray-450 dark:text-slate-500 font-bold">
+                            Filed: {new Date(complaint.createdAt).toLocaleDateString()} at {new Date(complaint.createdAt).toLocaleTimeString()}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 self-end sm:self-auto shrink-0 flex-wrap">
+                          {complaint.status === "disputed" && (
+                            <button
+                              onClick={() => handleRevokeDispute(complaint._id)}
+                              className="bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-white border border-amber-500/20 hover:border-amber-500 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-sm"
+                            >
+                              <ShieldAlert size={13} />
+                              Revoke Dispute
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteComplaint(complaint._id)}
+                            className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 hover:border-red-500 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-sm"
+                          >
+                            <Trash2 size={13} />
+                            Cancel Complaint (Delete)
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <h4 className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">
+                          Description
+                        </h4>
+                        <p className="text-xs text-gray-700 dark:text-slate-350 leading-relaxed font-medium">
+                          {complaint.description}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-gray-150 dark:border-slate-850/60">
+                        {/* Reported Worker */}
+                        <div className="space-y-1">
+                          <h4 className="text-[10px] font-black text-rose-500/80 uppercase tracking-wider flex items-center gap-1">
+                            <ShieldAlert size={12} />
+                            Reported Worker
+                          </h4>
+                          <div className="text-xs text-gray-700 dark:text-slate-300 space-y-0.5 font-bold">
+                            <p>Name: <span className="text-gray-900 dark:text-white">{complaint.worker_id?.name || "N/A"}</span></p>
+                            <p>Phone: <a href={`tel:${complaint.worker_id?.phone}`} className="text-blue-500 dark:text-orange-400 hover:underline">{complaint.worker_id?.phone || "N/A"}</a></p>
+                          </div>
+                        </div>
+
+                        {/* Reporting Client */}
+                        <div className="space-y-1 border-t sm:border-t-0 sm:border-l border-gray-200 dark:border-slate-800/80 pt-3 sm:pt-0 sm:pl-4">
+                          <h4 className="text-[10px] font-black text-blue-500/80 uppercase tracking-wider flex items-center gap-1">
+                            <Server size={12} />
+                            Reporting Client (Verify Claim)
+                          </h4>
+                          <div className="text-xs text-gray-700 dark:text-slate-300 space-y-0.5 font-bold">
+                            <p>Name: <span className="text-gray-900 dark:text-white">{complaint.user_id?.name || "N/A"}</span></p>
+                            <p>Phone: <a href={`tel:${complaint.user_id?.phone}`} className="text-blue-500 dark:text-orange-400 hover:underline">{complaint.user_id?.phone || "N/A"}</a></p>
+                            {complaint.user_id?.email && (
+                              <p>Email: <a href={`mailto:${complaint.user_id.email}`} className="text-blue-500 dark:text-orange-400 hover:underline">{complaint.user_id.email}</a></p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

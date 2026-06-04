@@ -44,6 +44,7 @@ const verifyFirebaseToken = async (idToken) => {
       email: decoded.email || null,
       name: decoded.name || null,
       picture: decoded.picture || null,
+      email_verified: decoded.email_verified || false,
     };
   } catch (adminErr) {
     // Fallback: use Firebase REST API with API key
@@ -68,6 +69,7 @@ const verifyFirebaseToken = async (idToken) => {
       email: u.email || null,
       name: u.displayName || null,
       picture: u.photoUrl || null,
+      email_verified: u.emailVerified || false,
     };
   }
 };
