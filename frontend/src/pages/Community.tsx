@@ -593,7 +593,7 @@ export default function Community() {
             </button>
 
             {/* Main Post Card */}
-            <div className="glass-panel rounded-3xl p-6 md:p-8 space-y-5">
+            <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-sm rounded-3xl p-6 md:p-8 space-y-5">
               
               {/* Post Author info */}
               <div className="flex items-center justify-between">
@@ -724,7 +724,7 @@ export default function Community() {
 
               {isAuthenticated ? (
                 /* Authenticated Comment Creator Box */
-                <form onSubmit={handleCommentSubmit} className="glass-card rounded-2xl p-4 space-y-3">
+                <form onSubmit={handleCommentSubmit} className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-sm rounded-2xl p-4 space-y-3">
                   <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
                     Add a comment or answer
                   </span>
@@ -733,7 +733,7 @@ export default function Community() {
                     onChange={e => setNewCommentContent(e.target.value)}
                     placeholder="Provide troubleshooting details, preventative recommendations..."
                     rows={3}
-                    className="w-full glass-input rounded-xl p-3 text-sm outline-none resize-none focus:ring-1 focus:ring-orange-500"
+                    className="w-full bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 rounded-xl p-3 text-sm outline-none resize-none"
                     required
                   />
 
@@ -798,7 +798,7 @@ export default function Community() {
                     <button
                       type="submit"
                       disabled={commentSubmitLoading}
-                      className="px-6 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-extrabold rounded-xl flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
+                      className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white text-xs font-extrabold rounded-xl flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
                     >
                       {commentSubmitLoading ? (
                         <Loader2 size={12} className="animate-spin" />
@@ -811,7 +811,7 @@ export default function Community() {
                 </form>
               ) : (
                 /* Guest View Comment call to action */
-                <div className="glass-card rounded-2xl p-5 text-center bg-slate-100/50 dark:bg-slate-900/10">
+                <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-sm rounded-2xl p-5 text-center bg-slate-100/50 dark:bg-slate-900/10">
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Want to participate? Sign in to comment, reply, and help the community!
                   </p>
@@ -821,7 +821,7 @@ export default function Community() {
               {/* Nested Comments Render */}
               {commentsLoading ? (
                 <div className="flex justify-center items-center py-8">
-                  <Loader2 className="animate-spin text-orange-500" />
+                  <Loader2 className="animate-spin text-indigo-500" />
                 </div>
               ) : comments.length === 0 ? (
                 <div className="py-8 text-center text-xs text-slate-400">
@@ -859,7 +859,7 @@ export default function Community() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                 <h1 className="text-3xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  <Sparkles className="text-orange-500 fill-orange-500" />
+                  <Sparkles className="text-indigo-500 fill-indigo-500" />
                   RapidFix Community
                 </h1>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xl">
@@ -876,7 +876,7 @@ export default function Community() {
                   Ask a Question
                 </button>
               ) : (
-                <div className="text-xs bg-orange-500/10 border border-orange-500/20 px-4 py-2.5 rounded-xl text-orange-500 font-extrabold">
+                <div className="text-xs bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 px-4 py-2.5 rounded-xl text-indigo-600 dark:text-indigo-400 font-bold">
                   Sign in to post a question
                 </div>
               )}
@@ -888,7 +888,7 @@ export default function Community() {
                 onClick={() => setSelectedTag("")}
                 className={`px-4 py-2 rounded-full text-xs font-extrabold cursor-pointer border transition-all ${
                   selectedTag === ""
-                    ? "bg-slate-900 dark:bg-orange-500 text-white border-slate-900 dark:border-orange-500 shadow-md"
+                    ? "bg-indigo-600 dark:bg-indigo-600 text-white border-indigo-600 dark:border-indigo-600 shadow-md"
                     : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-650 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850"
                 }`}
               >
@@ -900,7 +900,7 @@ export default function Community() {
                   onClick={() => setSelectedTag(tag)}
                   className={`px-4 py-2 rounded-full text-xs font-extrabold cursor-pointer border transition-all whitespace-nowrap ${
                     selectedTag === tag
-                      ? "bg-slate-900 dark:bg-orange-500 text-white border-slate-900 dark:border-orange-500 shadow-md"
+                      ? "bg-indigo-600 dark:bg-indigo-600 text-white border-indigo-600 dark:border-indigo-600 shadow-md"
                       : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-650 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850"
                   }`}
                 >
@@ -917,7 +917,7 @@ export default function Community() {
                   placeholder="Search questions or problems..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  className="w-full glass-input rounded-xl pl-10 pr-4 py-3 text-sm outline-none"
+                  className="w-full bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 rounded-xl pl-10 pr-4 py-3 text-sm outline-none"
                 />
                 <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 {search && (
@@ -954,7 +954,7 @@ export default function Community() {
             {/* Feed posts mapping */}
             {loading ? (
               <div className="flex justify-center items-center py-20">
-                <Loader2 className="animate-spin text-orange-500 w-10 h-10" />
+                <Loader2 className="animate-spin text-indigo-500 w-10 h-10" />
               </div>
             ) : posts.length === 0 ? (
               <div className="text-center py-20 border border-dashed border-slate-250 dark:border-slate-800 rounded-3xl bg-slate-500/5">
@@ -975,7 +975,7 @@ export default function Community() {
                     <div
                       key={post._id}
                       onClick={() => handleViewPost(post._id)}
-                      className="glass-card hover-scale-premium rounded-2xl p-5 md:p-6 cursor-pointer flex flex-col justify-between"
+                      className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-sm hover-scale-premium rounded-2xl p-5 md:p-6 cursor-pointer flex flex-col justify-between"
                     >
                       <div className="space-y-3">
                         {/* Feed Card Header */}
@@ -1028,7 +1028,7 @@ export default function Community() {
 
                         {/* Title & snippet */}
                         <div className="space-y-1">
-                          <h3 className="text-base font-extrabold text-slate-900 dark:text-white leading-snug group-hover:text-orange-500">
+                          <h3 className="text-base font-extrabold text-slate-900 dark:text-white leading-snug group-hover:text-indigo-500">
                             {post.title}
                           </h3>
                           <p className="text-slate-600 dark:text-slate-400 text-xs line-clamp-2 leading-relaxed">
@@ -1111,7 +1111,7 @@ export default function Community() {
             <div className="absolute top-[-10%] right-[-10%] w-[300px] h-[300px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
             
             <div className="relative z-10 flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
                 <Sparkles className="w-5 h-5" />
               </div>
               <span className="text-sm font-extrabold tracking-wider text-white uppercase">RapidFix Community</span>
@@ -1120,7 +1120,7 @@ export default function Community() {
             <div className="relative z-10 space-y-6 my-auto">
               <h1 className="text-3xl font-extrabold text-white leading-tight">
                 Ask the<br />
-                <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-indigo-400 to-violet-300 bg-clip-text text-transparent">
                   Community
                 </span>
               </h1>
@@ -1131,20 +1131,20 @@ export default function Community() {
           </div>
 
           {/* Right panel form */}
-          <div className="flex-1 bg-slate-950/95 backdrop-blur-xl relative flex flex-col justify-between overflow-y-auto">
+          <div className="flex-1 bg-white dark:bg-slate-950/95 backdrop-blur-xl relative flex flex-col justify-between overflow-y-auto">
             <button
               onClick={() => setIsNewPostOpen(false)}
-              className="absolute top-6 right-8 z-10 text-slate-400 hover:text-white transition-all w-11 h-11 flex items-center justify-center rounded-full bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer shadow-lg"
+              className="absolute top-6 right-8 z-10 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-all w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:bg-slate-200 dark:hover:border-slate-700 cursor-pointer"
             >
               <X size={16} />
             </button>
 
             <div className="w-full max-w-4xl mx-auto px-6 py-12 sm:px-12 md:py-16 my-auto">
               <form onSubmit={handleCreatePostSubmit} className="space-y-6">
-                <h2 className="text-2xl font-extrabold text-white">Ask your Question</h2>
+                <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">Ask your Question</h2>
 
                 {postError && (
-                  <div className="flex items-center gap-3 text-red-400 text-xs bg-red-950/20 border border-red-900/40 rounded-2xl px-5 py-4">
+                  <div className="flex items-center gap-3 text-red-600 dark:text-red-400 text-xs bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-2xl px-5 py-4">
                     <AlertCircle size={16} className="shrink-0" />
                     <span>{postError}</span>
                   </div>
@@ -1160,7 +1160,7 @@ export default function Community() {
                         value={postTitle}
                         onChange={e => setPostTitle(e.target.value)}
                         placeholder="e.g. How can I temporarily patch a copper plumbing pipe pinhole leak?"
-                        className="w-full border border-slate-800 bg-slate-900/40 text-white placeholder-slate-500 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent transition-all text-sm"
+                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white placeholder-slate-400 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-transparent transition-all text-sm"
                         required
                       />
                     </div>
@@ -1172,7 +1172,7 @@ export default function Community() {
                         onChange={e => setPostContent(e.target.value)}
                         placeholder="Describe the issue, what tools you have, and what you've tried..."
                         rows={6}
-                        className="w-full border border-slate-800 bg-slate-900/40 text-white placeholder-slate-500 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent transition-all text-sm resize-none scrollbar-thin"
+                        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white placeholder-slate-400 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-transparent transition-all text-sm resize-none scrollbar-thin"
                         required
                       />
                     </div>
@@ -1192,8 +1192,8 @@ export default function Community() {
                               onClick={() => handleTagToggle(tag)}
                               className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border transition-all ${
                                 active
-                                  ? "bg-orange-500 text-white border-orange-500 shadow-sm shadow-orange-500/20"
-                                  : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                  : "bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                               }`}
                             >
                               {tag}
@@ -1207,7 +1207,7 @@ export default function Community() {
                     <div className="grid grid-cols-2 gap-3 pt-2">
                       <div className="space-y-1.5">
                         <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Diagnostic Photos</label>
-                        <label className="flex flex-col items-center justify-center border border-dashed rounded-xl p-2 cursor-pointer text-center h-24 border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 transition-all">
+                        <label className="flex flex-col items-center justify-center border border-dashed rounded-xl p-2 cursor-pointer text-center h-24 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
                           <ImageIcon size={16} className="text-slate-500 mb-1" />
                           <span className="text-[9px] font-bold text-slate-300">Upload Images</span>
                           <span className="text-[7px] text-slate-500 mt-0.5">Max 5 images</span>
@@ -1217,7 +1217,7 @@ export default function Community() {
 
                       <div className="space-y-1.5">
                         <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Diagnostic Videos</label>
-                        <label className="flex flex-col items-center justify-center border border-dashed rounded-xl p-2 cursor-pointer text-center h-24 border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 transition-all">
+                        <label className="flex flex-col items-center justify-center border border-dashed rounded-xl p-2 cursor-pointer text-center h-24 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
                           <VideoIcon size={16} className="text-slate-500 mb-1" />
                           <span className="text-[9px] font-bold text-slate-300">Upload Clips</span>
                           <span className="text-[7px] text-slate-500 mt-0.5">Max 2 videos</span>
@@ -1228,7 +1228,7 @@ export default function Community() {
 
                     {/* Attachment preview panel */}
                     {(postPicturePreviews.length > 0 || postVideoPreviews.length > 0) && (
-                      <div className="border border-slate-800 bg-slate-900/20 rounded-xl p-3 space-y-2">
+                      <div className="border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/20 rounded-xl p-3 space-y-2">
                         <h4 className="text-[9px] uppercase font-bold tracking-wider text-slate-400">Attached Media</h4>
                         <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-thin">
                           {postPicturePreviews.map((src, i) => (
@@ -1263,11 +1263,11 @@ export default function Community() {
                 </div>
 
                 {/* Submission bar */}
-                <div className="pt-6 border-t border-slate-900 flex justify-end">
+                <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-end">
                   <button
                     type="submit"
                     disabled={postSubmitLoading}
-                    className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/10 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-500/10 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
                   >
                     {postSubmitLoading ? (
                       <>
@@ -1386,7 +1386,7 @@ function ReplyForm({ authorName, onCancel, onSubmit, loading }: ReplyFormProps) 
         onChange={e => setContent(e.target.value)}
         placeholder="Write your advice / solution..."
         rows={2}
-        className="w-full glass-input rounded-lg p-2.5 text-sm outline-none resize-none"
+        className="w-full bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 rounded-lg p-2.5 text-sm outline-none resize-none"
         required
       />
 
@@ -1449,7 +1449,7 @@ function ReplyForm({ authorName, onCancel, onSubmit, loading }: ReplyFormProps) 
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-1.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-extrabold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+          className="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white text-xs font-extrabold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
         >
           {loading ? (
             <Loader2 size={12} className="animate-spin" />

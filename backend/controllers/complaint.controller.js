@@ -1,5 +1,6 @@
 const complaintSchema = require('../model/complaint.model');
 const problemModel = require('../model/problem.model');
+const workersModel = require('../model/workers.model');
 
 const addComplaint = async (req, res) => {
     try {
@@ -47,6 +48,9 @@ const addComplaint = async (req, res) => {
         });
 
         await newComplaint.save();
+
+        // Keep the worker's cached complaint count in sync (gates the Trusted Elite badge)
+        await workersModel.findByIdAndUpdate(workerId, { $inc: { complaintsCount: 1 } });
 
         const io = req.app?.get('socketio');
         if (io) {
@@ -162,6 +166,11 @@ const deleteComplaintAdmin = async (req, res) => {
 
         if (!deleted) {
             return res.status(404).json({ success: false, message: "Complaint not found" });
+        }
+
+        // Decrement the worker's cached complaint count (a deleted/false complaint no longer counts)
+        if (deleted.worker_id) {
+            await workersModel.findByIdAndUpdate(deleted.worker_id, { $inc: { complaintsCount: -1 } });
         }
 
         return res.status(200).json({

@@ -1,28 +1,28 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { 
-  Database, 
-  Flame, 
-  Settings, 
-  Code, 
-  Copy, 
-  Download, 
-  RefreshCw, 
-  CheckCircle, 
-  Server, 
-  Activity, 
-  FileText, 
+import {
+  Database,
+  Flame,
+  Cloud,
+  Bot,
+  Code,
+  Copy,
+  Download,
+  RefreshCw,
+  CheckCircle,
+  Server,
+  LayoutDashboard,
+  FileText,
   Sparkles,
   ArrowLeft,
   Terminal,
   Save,
-  ShieldAlert,
-  Trash2,
-  Loader2
+  LogOut,
+  ChevronRight,
+  Lock,
+  type LucideIcon,
 } from "lucide-react";
 import api from "../service/api";
-import { usePopup } from "../context/PopupContext";
-
 
 interface MongoConfig {
   uri: string;
@@ -51,9 +51,12 @@ interface GeminiConfig {
   apiKey: string;
 }
 
-export default function SuperAdmin() {
-  const { showAlert, showConfirm } = usePopup();
+const CARD = "bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm";
+const INPUT = "w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all";
+const LABEL = "block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5";
+const BTN_PRIMARY = "inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-sm active:scale-[0.98] transition-all cursor-pointer";
 
+export default function SuperAdmin() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem("rf_super_admin_authenticated") === "true";
   });
@@ -62,10 +65,8 @@ export default function SuperAdmin() {
   const [adminError, setAdminError] = useState("");
   const [showAdminPass, setShowAdminPass] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "mongodb" | "firebase" | "cloudinary" | "gemini" | "dotenv" | "complaints">("dashboard");
-  const [adminComplaints, setAdminComplaints] = useState<any[]>([]);
-  const [complaintsLoading, setComplaintsLoading] = useState(false);
-  
+  const [activeTab, setActiveTab] = useState<"dashboard" | "mongodb" | "firebase" | "cloudinary" | "gemini" | "dotenv">("dashboard");
+
   // Initial configurations, will be dynamically populated from backend .env
   const [mongo, setMongo] = useState<MongoConfig>({
     uri: "",
@@ -136,67 +137,12 @@ export default function SuperAdmin() {
     setAdminPassword("");
   };
 
-  const fetchAdminComplaints = async () => {
-    setComplaintsLoading(true);
-    try {
-      const res = await api.get("/complaints/admin/all");
-      if (res.data && res.data.success) {
-        setAdminComplaints(res.data.complaints || []);
-      }
-    } catch (err: any) {
-      console.error("Failed to fetch admin complaints:", err);
-    } finally {
-      setComplaintsLoading(false);
-    }
-  };
-
-  const handleDeleteComplaint = async (complaintId: string) => {
-    const confirm = await showConfirm(
-      "Cancel & Delete Complaint",
-      "Are you sure you want to permanently cancel and delete this complaint? This action is irreversible and will remove it from the worker's record."
-    );
-    if (!confirm) return;
-
-    try {
-      const res = await api.delete(`/complaints/admin/delete/${complaintId}`);
-      if (res.data && res.data.success) {
-        await showAlert("Complaint Cancelled", "The complaint has been successfully deleted from the database.", "success");
-        fetchAdminComplaints();
-      }
-    } catch (err: any) {
-      await showAlert("Deletion Error", err?.response?.data?.message || "Failed to delete complaint.", "error");
-    }
-  };
-
-  const handleRevokeDispute = async (complaintId: string) => {
-    const confirm = await showConfirm(
-      "Revoke Worker Dispute",
-      "Are you sure you want to revoke the dispute? This will reject the worker's false claim and keep the complaint active on their profile."
-    );
-    if (!confirm) return;
-
-    try {
-      const res = await api.put(`/complaints/admin/revoke-dispute/${complaintId}`);
-      if (res.data && res.data.success) {
-        await showAlert("Dispute Revoked", "The worker's dispute claim has been rejected. The complaint is active again.", "success");
-        fetchAdminComplaints();
-      }
-    } catch (err: any) {
-      await showAlert("Revoke Error", err?.response?.data?.message || "Failed to revoke dispute.", "error");
-    }
-  };
-
-  useEffect(() => {
-    if (isAdminAuthenticated && activeTab === "complaints") {
-      fetchAdminComplaints();
-    }
-  }, [isAdminAuthenticated, activeTab]);
-
   // Fetch configs from the server when authenticated
   useEffect(() => {
     if (isAdminAuthenticated) {
       fetchActiveConfig();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdminAuthenticated]);
 
   // Generate logs simulation
@@ -215,8 +161,8 @@ export default function SuperAdmin() {
   };
 
   const syncConfigsToServer = async (
-    targetMongo: MongoConfig, 
-    targetFirebase: FirebaseConfig, 
+    targetMongo: MongoConfig,
+    targetFirebase: FirebaseConfig,
     targetCloudinary?: CloudinaryConfig,
     targetGemini?: GeminiConfig
   ) => {
@@ -233,7 +179,7 @@ export default function SuperAdmin() {
       if (response.data && response.data.success) {
         addLog(`[SYSTEM] Sync successful! Database: ${response.data.dbStatus}`);
         addLog("[SYSTEM] In-memory process.env successfully hot-reloaded.");
-        
+
         // Save the Firebase config to localStorage to allow dynamic runtime initialization in production
         localStorage.setItem("rf_firebase_config", JSON.stringify(targetFirebase));
 
@@ -346,61 +292,52 @@ GEMINI_API_KEY=${gemini.apiKey}
     triggerSaveSuccess();
   };
 
+  // ─── Login gate ─────────────────────────────────────────────────────────
   if (!isAdminAuthenticated) {
     return (
-      <div className="min-h-screen bg-transparent text-white flex items-center justify-center p-4 relative overflow-hidden font-sans">
-        {/* Dynamic Glowing Ambient Circles */}
-        <div className="absolute top-1/4 left-1/4 w-[350px] h-[350px] bg-blue-600/15 rounded-full blur-3xl animate-pulse-glow pointer-events-none"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-[350px] h-[350px] bg-orange-600/10 rounded-full blur-3xl animate-pulse-glow pointer-events-none"></div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white flex items-center justify-center p-4 relative overflow-hidden font-sans">
+        <div className="absolute top-1/4 left-1/4 w-[350px] h-[350px] bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-[350px] h-[350px] bg-violet-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <Link
           to="/"
-          className="absolute top-8 left-8 flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-all no-underline bg-slate-900/40 border border-slate-800 hover:border-slate-700 px-4 py-2 rounded-full cursor-pointer shadow-md"
+          className="absolute top-8 left-8 inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-all no-underline bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-full shadow-sm"
         >
-          <ArrowLeft size={14} />
-          Back to Home
+          <ArrowLeft size={14} /> Back to Home
         </Link>
 
-        <div className="w-full max-w-md relative z-10 animate-slide-up">
-          <div className="glass-panel rounded-3xl p-8 shadow-2xl shadow-black/50">
-            {/* Header */}
+        <div className="w-full max-w-md relative z-10">
+          <div className={`${CARD} p-8 shadow-xl`}>
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-500 mb-4 border border-orange-500/20">
-                <Settings size={28} className="animate-spin-slow" />
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mb-4 border border-indigo-100 dark:border-indigo-500/20">
+                <Server size={26} />
               </div>
-              <h1 className="text-2xl font-extrabold tracking-tight text-white">Super-Admin Access</h1>
-              <p className="text-xs text-slate-500 mt-2">
-                Authorized Personnel Only. Please enter database cryptographic credentials.
-              </p>
+              <h1 className="text-xl font-bold tracking-tight">Super-Admin Console</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">Authorized personnel only. Enter your console credentials.</p>
             </div>
 
             {adminError && (
-              <div className="mb-6 flex items-center gap-2.5 text-red-400 text-xs bg-red-950/20 border border-red-900/40 rounded-2xl px-4 py-3 animate-fade-in">
+              <div className="mb-6 flex items-center gap-2.5 text-red-600 dark:text-red-400 text-xs bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-xl px-4 py-3">
                 ⚠ {adminError}
               </div>
             )}
 
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div>
-                <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1.5 ml-0.5">Admin Username</label>
+                <label className="block text-[11px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Admin Username</label>
                 <input
                   type="text"
                   value={adminUsername}
                   onChange={(e) => setAdminUsername(e.target.value)}
                   placeholder="admin123"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-slate-950/50 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all text-sm"
+                  className={INPUT}
                   required
                 />
               </div>
-
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 ml-0.5">Password</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminPass(!showAdminPass)}
-                    className="text-[10px] text-orange-400 hover:underline cursor-pointer"
-                  >
+                  <label className="block text-[11px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">Password</label>
+                  <button type="button" onClick={() => setShowAdminPass(!showAdminPass)} className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
                     {showAdminPass ? "Hide" : "Show"}
                   </button>
                 </div>
@@ -409,16 +346,12 @@ GEMINI_API_KEY=${gemini.apiKey}
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-slate-950/50 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all text-sm"
+                  className={INPUT}
                   required
                 />
               </div>
-
-              <button
-                type="submit"
-                className="w-full py-3.5 mt-2 rounded-xl font-bold text-white text-sm bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 transition-all shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 active:scale-[0.98] cursor-pointer"
-              >
-                Authenticate Control Center
+              <button type="submit" className={`${BTN_PRIMARY} w-full mt-2`}>
+                <Lock size={15} /> Authenticate Console
               </button>
             </form>
           </div>
@@ -427,651 +360,302 @@ GEMINI_API_KEY=${gemini.apiKey}
     );
   }
 
-  return (
-    <div className="min-h-screen bg-transparent text-gray-800 dark:text-gray-200 transition-colors duration-300 relative overflow-hidden flex flex-col font-sans">
-      
-      {/* Dynamic Ambient Background Gradients */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-100/40 dark:bg-blue-950/10 rounded-full blur-3xl -z-10 pointer-events-none"></div>
-      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-orange-100/40 dark:bg-orange-950/10 rounded-full blur-3xl -z-10 pointer-events-none"></div>
+  const navItems: { id: typeof activeTab; label: string; icon: LucideIcon }[] = [
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "mongodb", label: "MongoDB", icon: Database },
+    { id: "firebase", label: "Firebase", icon: Flame },
+    { id: "cloudinary", label: "Cloudinary", icon: Cloud },
+    { id: "gemini", label: "Gemini AI", icon: Bot },
+    { id: "dotenv", label: ".env Sync", icon: Code },
+  ];
 
+  // Reusable section header (explicit icon-wrap classes so Tailwind keeps them)
+  const SectionHead = ({ icon: Icon, title, desc, iconWrap = "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" }: { icon: LucideIcon; title: string; desc: string; iconWrap?: string }) => (
+    <div className="flex items-center gap-3 mb-6">
+      <div className={`p-2 rounded-xl ${iconWrap}`}>
+        <Icon size={18} />
+      </div>
+      <div>
+        <h2 className="text-base font-bold text-slate-900 dark:text-white">{title}</h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{desc}</p>
+      </div>
+    </div>
+  );
+
+  // ─── Authenticated console ────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white flex flex-col font-sans">
       {/* Header */}
-      <header className="z-10 bg-white/60 dark:bg-slate-950/40 backdrop-blur-lg border-b border-gray-200/50 dark:border-slate-800/40 px-6 py-4 flex items-center justify-between sticky top-0">
-        <div className="flex items-center gap-4">
-          <Link to="/" className="p-2 rounded-full hover:bg-gray-150 dark:hover:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
+      <header className="z-10 bg-white/80 dark:bg-slate-900/60 backdrop-blur-lg border-b border-slate-200 dark:border-slate-800 px-4 sm:px-8 py-4 flex items-center justify-between sticky top-0">
+        <div className="flex items-center gap-3">
+          <Link to="/" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">
             <ArrowLeft size={18} />
           </Link>
-          <div className="flex items-center gap-2">
-            <Settings className="text-orange-500 dark:text-orange-500 animate-spin-slow" size={24} />
-            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
-              Super-Admin <span className="text-xs bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 font-semibold px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-900/40">Control Center</span>
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <Server size={20} />
+            </div>
+            <h1 className="text-base sm:text-lg font-bold tracking-tight">
+              Super-Admin <span className="hidden sm:inline text-slate-400 font-medium">Console</span>
             </h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Global Save Indicator Alert Banner */}
+        <div className="flex items-center gap-3">
           {saveSuccess && (
-            <div className="flex items-center gap-2 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/40 text-green-700 dark:text-green-400 px-4 py-1.5 rounded-full text-xs font-medium animate-pulse">
-              <CheckCircle size={14} />
-              Dynamic Configs Applied Successfully!
+            <div className="hidden sm:flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-xs font-semibold">
+              <CheckCircle size={14} /> Configs applied
             </div>
           )}
-
-          <button
-            onClick={handleAdminSignOut}
-            className="px-4 py-2 rounded-full border border-red-200 dark:border-red-905 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
-          >
-            Lock Control Center
+          <button onClick={handleAdminSignOut} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold transition-all cursor-pointer">
+            <LogOut size={13} /> <span className="hidden sm:inline">Sign Out</span>
           </button>
         </div>
       </header>
 
-      {/* Main Body */}
-      <div className="flex-1 flex flex-col md:flex-row max-w-7xl w-full mx-auto p-4 md:p-8 gap-8 overflow-hidden">
-        
-        {/* Navigation Sidebar */}
-        <aside className="w-full md:w-64 flex flex-row md:flex-col gap-2 p-2 bg-white/55 dark:bg-slate-950/20 backdrop-blur-md border border-white/20 dark:border-slate-800/20 rounded-3xl h-fit">
-          {[
-            { id: "dashboard", label: "Dashboard Overview", icon: <Activity size={18} /> },
-            { id: "mongodb", label: "MongoDB Configs", icon: <Database size={18} /> },
-            { id: "firebase", label: "Firebase Settings", icon: <Flame size={18} /> },
-            { id: "cloudinary", label: "Cloudinary Settings", icon: <Sparkles size={18} /> },
-            { id: "gemini", label: "Gemini AI Settings", icon: <Sparkles size={18} /> },
-            { id: "dotenv", label: ".env Sync Hub", icon: <Code size={18} /> },
-            { id: "complaints", label: "Complaints Queue", icon: <ShieldAlert size={18} /> }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex-1 md:flex-initial flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-300 cursor-pointer ${
-                activeTab === tab.id
-                  ? "bg-blue-900 dark:bg-orange-600 text-white shadow-lg"
-                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800/40 hover:text-gray-900 dark:hover:text-white"
-              }`}
-            >
-              {tab.icon}
-              <span className="hidden sm:inline md:inline">{tab.label}</span>
-            </button>
-          ))}
-          
-          <div className="hidden md:block border-t border-gray-200/50 dark:border-slate-800/50 my-2"></div>
-          
+      <div className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-8 grid grid-cols-1 lg:grid-cols-[230px_1fr] gap-6 lg:gap-8 items-start">
+        {/* Sidebar */}
+        <nav className={`${CARD} p-2 flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible lg:sticky lg:top-28`}>
+          {navItems.map((item) => {
+            const active = activeTab === item.id;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`group flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  active
+                    ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <Icon size={16} className="shrink-0" />
+                <span className="flex-1 text-left">{item.label}</span>
+                {active && <ChevronRight size={14} className="hidden lg:block opacity-70" />}
+              </button>
+            );
+          })}
+
+          <div className="hidden lg:block border-t border-slate-100 dark:border-slate-800 my-1.5"></div>
+
           <button
             onClick={resetToEnvDefaults}
-            className="hidden md:flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all cursor-pointer w-full text-left"
+            className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-700 dark:hover:text-white transition-all cursor-pointer"
           >
-            <RefreshCw size={14} />
-            Reset to .env Defaults
+            <RefreshCw size={14} className="shrink-0" />
+            <span className="text-left">Reset to .env</span>
           </button>
-        </aside>
+        </nav>
 
-        {/* Dynamic Display Panel */}
-        <main className="flex-1 flex flex-col bg-white/70 dark:bg-slate-950/30 backdrop-blur-lg border border-white/30 dark:border-slate-800/30 rounded-3xl shadow-xl overflow-hidden p-6 md:p-8">
-          
-          {/* TAB 1: DASHBOARD OVERVIEW */}
+        {/* Content */}
+        <div className="min-w-0">
+          {/* DASHBOARD */}
           {activeTab === "dashboard" && (
-            <div className="space-y-6 flex-1 flex flex-col">
-              
-              {/* Header card */}
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  System Overview <Sparkles className="text-orange-500" size={20} />
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Monitor live system configurations and override environmental parameters instantly without server rebuilds.
-                </p>
-              </div>
+            <div className="space-y-6">
+              <div className={`${CARD} p-6 sm:p-8`}>
+                <SectionHead icon={Sparkles} title="System Overview" desc="Live configuration status, overridable without server rebuilds." />
 
-              {/* Quick Config Metrics */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                
-                <div className="bg-slate-50 dark:bg-slate-900/40 border border-gray-150 dark:border-slate-800 p-6 rounded-2xl flex items-center gap-4 shadow-sm">
-                  <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 flex items-center justify-center">
-                    <Database size={22} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">MongoDB</p>
-                    <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate max-w-[150px]">{mongo.dbName}</p>
-                    <span className="text-[10px] bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">Dynamic Mode</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-900/40 border border-gray-150 dark:border-slate-800 p-6 rounded-2xl flex items-center gap-4 shadow-sm">
-                  <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center">
-                    <Flame size={22} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Firebase API</p>
-                    <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate max-w-[150px]">{firebase.apiKey ? "Configured" : "Missing"}</p>
-                    <span className="text-[10px] bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full font-medium">Synced</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-900/40 border border-gray-150 dark:border-slate-800 p-6 rounded-2xl flex items-center gap-4 shadow-sm">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                    <Server size={22} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Environment Mode</p>
-                    <p className="text-sm font-bold text-gray-800 dark:text-gray-200">Development</p>
-                    <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full font-medium">Override Active</span>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Dynamic Console Logs */}
-              <div className="flex-1 flex flex-col bg-slate-950 text-slate-300 p-6 rounded-2xl font-mono text-xs border border-slate-900 min-h-[220px]">
-                <div className="flex items-center justify-between border-b border-slate-900 pb-3 mb-4 text-slate-500">
-                  <div className="flex items-center gap-2">
-                    <Terminal size={14} className="text-orange-500" />
-                    <span>Dynamic Configuration Logs</span>
-                  </div>
-                  <span className="text-[10px] bg-slate-900 px-2 py-0.5 rounded text-slate-400">Live Simulator</span>
-                </div>
-                <div className="flex-1 overflow-y-auto space-y-2.5 max-h-[260px] scrollbar-thin">
-                  {logs.map((log, index) => (
-                    <div key={index} className="leading-relaxed">
-                      <span className="text-blue-500">&gt;&gt;</span> {log}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><Database size={20} /></div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-400 uppercase font-bold">MongoDB</p>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{mongo.dbName || "—"}</p>
                     </div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-lg bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0"><Flame size={20} /></div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-400 uppercase font-bold">Firebase API</p>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{firebase.apiKey ? "Configured" : "Missing"}</p>
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><Server size={20} /></div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-400 uppercase font-bold">Environment</p>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">Development</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Console logs */}
+              <div className="bg-slate-950 text-slate-300 p-5 sm:p-6 rounded-2xl font-mono text-xs border border-slate-800 shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4 text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <Terminal size={14} className="text-indigo-400" />
+                    <span>Configuration Logs</span>
+                  </div>
+                  <span className="text-[10px] bg-slate-900 px-2 py-0.5 rounded text-slate-400">Live</span>
+                </div>
+                <div className="space-y-2 max-h-[260px] overflow-y-auto">
+                  {logs.map((log, index) => (
+                    <div key={index} className="leading-relaxed"><span className="text-indigo-400">&gt;&gt;</span> {log}</div>
                   ))}
                 </div>
               </div>
-
             </div>
           )}
 
-          {/* TAB 2: MONGODB CONFIGURATIONS */}
+          {/* MONGODB */}
           {activeTab === "mongodb" && (
-            <form onSubmit={handleSaveMongo} className="space-y-6">
-              
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Database className="text-blue-600" size={24} />
-                  MongoDB Settings
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Configure local and cloud MongoDB parameters. Used to construct the dynamic database schema definitions.
-                </p>
-              </div>
+            <form onSubmit={handleSaveMongo} className={`${CARD} p-6 sm:p-8`}>
+              <SectionHead icon={Database} title="MongoDB Settings" desc="Configure local and cloud database connection parameters." iconWrap="bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-semibold mb-2">MongoDB URI Connection String</label>
-                  <input
-                    type="text"
-                    value={mongo.uri}
-                    onChange={(e) => setMongo({ ...mongo, uri: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="mongodb://username:password@host:port/database"
-                    required
-                  />
+                  <label className={LABEL}>MongoDB URI Connection String</label>
+                  <input type="text" value={mongo.uri} onChange={(e) => setMongo({ ...mongo, uri: e.target.value })} className={INPUT} placeholder="mongodb://username:password@host:port/database" required />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Database Name</label>
-                  <input
-                    type="text"
-                    value={mongo.dbName}
-                    onChange={(e) => setMongo({ ...mongo, dbName: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="rapid_fix_db"
-                    required
-                  />
+                  <label className={LABEL}>Database Name</label>
+                  <input type="text" value={mongo.dbName} onChange={(e) => setMongo({ ...mongo, dbName: e.target.value })} className={INPUT} placeholder="rapid_fix_db" required />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Connection Timeout (ms)</label>
-                  <input
-                    type="number"
-                    value={mongo.timeout}
-                    onChange={(e) => setMongo({ ...mongo, timeout: parseInt(e.target.value) || 5000 })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="5000"
-                    required
-                  />
+                  <label className={LABEL}>Connection Timeout (ms)</label>
+                  <input type="number" value={mongo.timeout} onChange={(e) => setMongo({ ...mongo, timeout: parseInt(e.target.value) || 5000 })} className={INPUT} placeholder="5000" required />
                 </div>
-
-                <div className="sm:col-span-2 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-gray-200/50 dark:border-slate-800/50">
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="text-sm font-semibold">Max Connection Pool Size: <span className="text-blue-900 dark:text-orange-500 font-bold">{mongo.maxPoolSize}</span></label>
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="100"
-                    value={mongo.maxPoolSize}
-                    onChange={(e) => setMongo({ ...mongo, maxPoolSize: parseInt(e.target.value) })}
-                    className="w-full accent-blue-900 dark:accent-orange-500 cursor-pointer h-2 bg-gray-250 dark:bg-slate-800 rounded-lg appearance-none"
-                  />
+                <div className="sm:col-span-2 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <label className="text-sm font-semibold flex justify-between mb-2">Max Connection Pool Size <span className="text-indigo-600 dark:text-indigo-400 font-bold">{mongo.maxPoolSize}</span></label>
+                  <input type="range" min="1" max="100" value={mongo.maxPoolSize} onChange={(e) => setMongo({ ...mongo, maxPoolSize: parseInt(e.target.value) })} className="w-full accent-indigo-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none" />
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="pt-4 border-t border-gray-200/50 dark:border-slate-800/50 flex flex-col sm:flex-row gap-4 justify-end">
+              <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row gap-3 justify-end">
                 <button
                   type="button"
                   onClick={testMongoConnection}
                   disabled={connectionStatus === "testing"}
-                  className={`px-5 py-3 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors ${
+                  className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold border transition-all cursor-pointer ${
                     connectionStatus === "success"
-                      ? "bg-green-100 dark:bg-green-950/40 text-green-700 border border-green-200 dark:border-green-900/40"
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/40"
                       : connectionStatus === "error"
-                      ? "bg-red-100 dark:bg-red-950/40 text-red-700 border border-red-200 dark:border-red-900/40"
-                      : "bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700"
+                      ? "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200 dark:border-red-900/40"
+                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
                   }`}
                 >
                   <RefreshCw className={`w-4 h-4 ${connectionStatus === "testing" ? "animate-spin" : ""}`} />
-                  {connectionStatus === "testing"
-                    ? "Connecting..."
-                    : connectionStatus === "success"
-                    ? "Connection Verified!"
-                    : connectionStatus === "error"
-                    ? "Failed - Try Again"
-                    : "Test Connection"}
+                  {connectionStatus === "testing" ? "Connecting…" : connectionStatus === "success" ? "Connection Verified!" : connectionStatus === "error" ? "Failed — Try Again" : "Test Connection"}
                 </button>
-
-                <button
-                  type="submit"
-                  className="bg-blue-900 dark:bg-orange-600 text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-blue-800 dark:hover:bg-orange-500 transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Save size={16} />
-                  Save Mongo Settings
-                </button>
+                <button type="submit" className={BTN_PRIMARY}><Save size={16} /> Save Mongo Settings</button>
               </div>
-
             </form>
           )}
 
-          {/* TAB 3: FIREBASE CREDENTIALS */}
+          {/* FIREBASE */}
           {activeTab === "firebase" && (
-            <form onSubmit={handleSaveFirebase} className="space-y-6">
-              
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Flame className="text-orange-500" size={24} />
-                  Firebase Credentials
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Update Firebase details dynamically to override active authentication, document triggers, and cloud services immediately.
-                </p>
-              </div>
+            <form onSubmit={handleSaveFirebase} className={`${CARD} p-6 sm:p-8`}>
+              <SectionHead icon={Flame} title="Firebase Credentials" desc="Override authentication and cloud service credentials live." iconWrap="bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400" />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold mb-2">API Key</label>
-                  <input
-                    type="text"
-                    value={firebase.apiKey}
-                    onChange={(e) => setFirebase({ ...firebase, apiKey: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="AIzaSy..."
-                  />
+                  <label className={LABEL}>API Key</label>
+                  <input type="text" value={firebase.apiKey} onChange={(e) => setFirebase({ ...firebase, apiKey: e.target.value })} className={INPUT} placeholder="AIzaSy..." />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Auth Domain</label>
-                  <input
-                    type="text"
-                    value={firebase.authDomain}
-                    onChange={(e) => setFirebase({ ...firebase, authDomain: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="your-project.firebaseapp.com"
-                  />
+                  <label className={LABEL}>Auth Domain</label>
+                  <input type="text" value={firebase.authDomain} onChange={(e) => setFirebase({ ...firebase, authDomain: e.target.value })} className={INPUT} placeholder="your-project.firebaseapp.com" />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Project ID</label>
-                  <input
-                    type="text"
-                    value={firebase.projectId}
-                    onChange={(e) => setFirebase({ ...firebase, projectId: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="your-project"
-                  />
+                  <label className={LABEL}>Project ID</label>
+                  <input type="text" value={firebase.projectId} onChange={(e) => setFirebase({ ...firebase, projectId: e.target.value })} className={INPUT} placeholder="your-project" />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Storage Bucket</label>
-                  <input
-                    type="text"
-                    value={firebase.storageBucket}
-                    onChange={(e) => setFirebase({ ...firebase, storageBucket: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="your-project.appspot.com"
-                  />
+                  <label className={LABEL}>Storage Bucket</label>
+                  <input type="text" value={firebase.storageBucket} onChange={(e) => setFirebase({ ...firebase, storageBucket: e.target.value })} className={INPUT} placeholder="your-project.appspot.com" />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Messaging Sender ID</label>
-                  <input
-                    type="text"
-                    value={firebase.messagingSenderId}
-                    onChange={(e) => setFirebase({ ...firebase, messagingSenderId: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="8291823901"
-                  />
+                  <label className={LABEL}>Messaging Sender ID</label>
+                  <input type="text" value={firebase.messagingSenderId} onChange={(e) => setFirebase({ ...firebase, messagingSenderId: e.target.value })} className={INPUT} placeholder="8291823901" />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-semibold mb-2">App ID</label>
-                  <input
-                    type="text"
-                    value={firebase.appId}
-                    onChange={(e) => setFirebase({ ...firebase, appId: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="1:829182:web:9102"
-                  />
+                  <label className={LABEL}>App ID</label>
+                  <input type="text" value={firebase.appId} onChange={(e) => setFirebase({ ...firebase, appId: e.target.value })} className={INPUT} placeholder="1:829182:web:9102" />
                 </div>
-
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-semibold mb-2">Measurement ID</label>
-                  <input
-                    type="text"
-                    value={firebase.measurementId}
-                    onChange={(e) => setFirebase({ ...firebase, measurementId: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="G-12345ABC"
-                  />
+                  <label className={LABEL}>Measurement ID</label>
+                  <input type="text" value={firebase.measurementId} onChange={(e) => setFirebase({ ...firebase, measurementId: e.target.value })} className={INPUT} placeholder="G-12345ABC" />
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="pt-4 border-t border-gray-200/50 dark:border-slate-800/50 flex justify-end">
-                <button
-                  type="submit"
-                  className="bg-blue-900 dark:bg-orange-600 text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-blue-800 dark:hover:bg-orange-500 transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Save size={16} />
-                  Save Firebase Keys
-                </button>
+              <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button type="submit" className={BTN_PRIMARY}><Save size={16} /> Save Firebase Keys</button>
               </div>
-
             </form>
           )}
 
-          {/* TAB 4: CLOUDINARY CREDENTIALS */}
+          {/* CLOUDINARY */}
           {activeTab === "cloudinary" && (
-            <form onSubmit={handleSaveCloudinary} className="space-y-6">
-              
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Sparkles className="text-amber-500" size={24} />
-                  Cloudinary Configuration
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Configure dynamic media assets cloud parameters to stream, save, and retrieve technician diagnostic photos and videos smoothly.
-                </p>
-              </div>
+            <form onSubmit={handleSaveCloudinary} className={`${CARD} p-6 sm:p-8`}>
+              <SectionHead icon={Cloud} title="Cloudinary Configuration" desc="Media storage parameters for photos and videos." iconWrap="bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400" />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Cloud Name</label>
-                  <input
-                    type="text"
-                    value={cloudinary.cloudName}
-                    onChange={(e) => setCloudinary({ ...cloudinary, cloudName: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="e.g. rapidfixcloud"
-                    required
-                  />
+                  <label className={LABEL}>Cloud Name</label>
+                  <input type="text" value={cloudinary.cloudName} onChange={(e) => setCloudinary({ ...cloudinary, cloudName: e.target.value })} className={INPUT} placeholder="e.g. rapidfixcloud" required />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-semibold mb-2">API Key</label>
-                  <input
-                    type="text"
-                    value={cloudinary.apiKey}
-                    onChange={(e) => setCloudinary({ ...cloudinary, apiKey: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="e.g. 192839281923"
-                    required
-                  />
+                  <label className={LABEL}>API Key</label>
+                  <input type="text" value={cloudinary.apiKey} onChange={(e) => setCloudinary({ ...cloudinary, apiKey: e.target.value })} className={INPUT} placeholder="e.g. 192839281923" required />
                 </div>
-
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-semibold mb-2">API Secret</label>
-                  <input
-                    type="password"
-                    value={cloudinary.apiSecret}
-                    onChange={(e) => setCloudinary({ ...cloudinary, apiSecret: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="••••••••••••••••••••••••••••••••"
-                    required
-                  />
+                  <label className={LABEL}>API Secret</label>
+                  <input type="password" value={cloudinary.apiSecret} onChange={(e) => setCloudinary({ ...cloudinary, apiSecret: e.target.value })} className={INPUT} placeholder="••••••••••••••••••••••••••••••••" required />
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="pt-4 border-t border-gray-200/50 dark:border-slate-800/50 flex justify-end">
-                <button
-                  type="submit"
-                  className="bg-blue-900 dark:bg-orange-600 text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-blue-800 dark:hover:bg-orange-500 transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Save size={16} />
-                  Save Cloudinary Media Keys
-                </button>
+              <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button type="submit" className={BTN_PRIMARY}><Save size={16} /> Save Cloudinary Keys</button>
               </div>
-
             </form>
           )}
 
-          {/* TAB 5: GEMINI AI CREDENTIALS */}
+          {/* GEMINI */}
           {activeTab === "gemini" && (
-            <form onSubmit={handleSaveGemini} className="space-y-6">
-              
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Sparkles className="text-amber-500" size={24} />
-                  Gemini AI Credentials
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Configure your Google Gemini API Key dynamically. Used securely on the backend to diagnose customer troubleshooting requests.
-                </p>
+            <form onSubmit={handleSaveGemini} className={`${CARD} p-6 sm:p-8`}>
+              <SectionHead icon={Bot} title="Gemini AI Credentials" desc="API key used on the backend for AI diagnostics." iconWrap="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
+
+              <div>
+                <label className={LABEL}>Gemini API Key</label>
+                <input type="password" value={gemini.apiKey} onChange={(e) => setGemini({ ...gemini, apiKey: e.target.value })} className={INPUT} placeholder="AIzaSy..." required />
               </div>
 
-              <div className="grid grid-cols-1 gap-6">
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Gemini API Key</label>
-                  <input
-                    type="password"
-                    value={gemini.apiKey}
-                    onChange={(e) => setGemini({ ...gemini, apiKey: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 dark:focus:border-orange-500 outline-none transition-colors"
-                    placeholder="AIzaSy..."
-                    required
-                  />
-                </div>
+              <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button type="submit" className={BTN_PRIMARY}><Save size={16} /> Save Gemini Key</button>
               </div>
-
-              {/* Action Buttons */}
-              <div className="pt-4 border-t border-gray-200/50 dark:border-slate-800/50 flex justify-end">
-                <button
-                  type="submit"
-                  className="bg-blue-900 dark:bg-orange-600 text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-blue-800 dark:hover:bg-orange-500 transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Save size={16} />
-                  Save Gemini Key
-                </button>
-              </div>
-
             </form>
           )}
 
-          {/* TAB 4: .ENV SYNC HUB */}
+          {/* DOTENV */}
           {activeTab === "dotenv" && (
-            <div className="space-y-6 flex-1 flex flex-col">
-              
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Code className="text-purple-500" size={24} />
-                  Environment Sync Hub (.env)
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Export your active control center overrides into a structured `.env` configuration file ready for physical application deployments.
-                </p>
-              </div>
+            <div className="space-y-5">
+              <div className={`${CARD} p-6 sm:p-8`}>
+                <SectionHead icon={Code} title="Environment Sync Hub" desc="Export your active overrides as a ready-to-use .env file." />
 
-              {/* Code display screen */}
-              <div className="flex-1 flex flex-col relative bg-slate-950 p-6 rounded-2xl border border-slate-900 min-h-[250px] font-mono text-xs">
-                
-                <div className="absolute top-4 right-4 flex items-center gap-2">
-                  <button
-                    onClick={handleCopyEnv}
-                    className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer border border-slate-800/60"
-                    title="Copy to Clipboard"
-                  >
-                    {copied ? <span className="text-[10px] text-green-500 font-semibold px-1">Copied!</span> : <Copy size={14} />}
-                  </button>
-
-                  <button
-                    onClick={handleDownloadEnv}
-                    className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer border border-slate-800/60"
-                    title="Download File"
-                  >
-                    <Download size={14} />
-                  </button>
+                <div className="relative bg-slate-950 p-5 sm:p-6 rounded-xl border border-slate-800 font-mono text-xs">
+                  <div className="absolute top-4 right-4 flex items-center gap-2">
+                    <button onClick={handleCopyEnv} className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer border border-slate-800" title="Copy to Clipboard">
+                      {copied ? <span className="text-[10px] text-emerald-400 font-semibold px-1">Copied!</span> : <Copy size={14} />}
+                    </button>
+                    <button onClick={handleDownloadEnv} className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer border border-slate-800" title="Download File">
+                      <Download size={14} />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-500 border-b border-slate-800 pb-3 mb-4">
+                    <FileText size={14} /> <span>.env file template</span>
+                  </div>
+                  <pre className="overflow-auto text-slate-300 leading-relaxed whitespace-pre-wrap max-h-[360px]">{generateEnvString()}</pre>
                 </div>
 
-                <div className="flex items-center gap-2 text-slate-500 border-b border-slate-900 pb-3 mb-4">
-                  <FileText size={14} />
-                  <span>Configured .env File Template</span>
+                <div className="mt-5 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 text-amber-800 dark:text-amber-300 text-xs leading-relaxed flex items-start gap-3">
+                  <Sparkles className="text-amber-500 mt-0.5 shrink-0" size={16} />
+                  <p className="m-0 font-medium"><strong>Tip:</strong> Saving updates the active configs immediately in your browser runtime. To persist permanently, download this file and replace your root <code>.env</code>.</p>
                 </div>
-
-                <pre className="flex-1 overflow-auto text-slate-300 leading-relaxed scrollbar-thin whitespace-pre-wrap">
-                  {generateEnvString()}
-                </pre>
               </div>
-
-              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 text-amber-800 dark:text-amber-300 text-xs leading-relaxed flex items-start gap-3">
-                <Sparkles className="text-amber-500 mt-0.5 shrink-0" size={16} />
-                <p className="m-0 font-medium">
-                  <strong>Developer Tip:</strong> Saving changes updates the active configs immediately inside your browser's runtime. If you wish to hard-code them permanently, click the download button above and replace your local development root `.env` file!
-                </p>
-              </div>
-
             </div>
           )}
-
-          {/* TAB 5: COMPLAINTS QUEUE */}
-          {activeTab === "complaints" && (
-            <div className="space-y-6 flex-grow flex flex-col">
-              <div className="space-y-2 pb-4 border-b border-gray-200/50 dark:border-slate-800/50">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <ShieldAlert className="text-red-500 animate-pulse" size={24} />
-                  Complaints Review Queue
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Review claims filed against workers, contact reporting clients to verify details, and cancel complaints proved to be false or personal vengeance.
-                </p>
-              </div>
-
-              {complaintsLoading ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-16">
-                  <Loader2 className="animate-spin text-orange-500 mb-3" size={32} />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold">Retrieving complaints log…</p>
-                </div>
-              ) : adminComplaints.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-16 text-center max-w-sm mx-auto animate-fade-in">
-                  <CheckCircle className="text-green-500 mb-4 animate-bounce-slow" size={40} />
-                  <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Queue is Clear</h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
-                    There are no active customer complaints filed in the database.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex-grow overflow-y-auto space-y-6 max-h-[60vh] pr-2 animate-fade-in">
-                  {adminComplaints.map((complaint) => (
-                    <div 
-                      key={complaint._id}
-                      className={`p-6 rounded-3xl bg-white dark:bg-slate-900/40 border ${
-                        complaint.status === "disputed" 
-                          ? "border-amber-500/40 shadow-amber-500/5 bg-amber-500/[0.02]" 
-                          : "border-gray-200 dark:border-slate-800"
-                      } flex flex-col gap-4 shadow-md transition-all hover:shadow-lg`}
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-150 dark:border-slate-800 pb-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            {complaint.status === "disputed" && (
-                              <span className="bg-amber-500/10 border border-amber-500/30 text-amber-500 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider animate-pulse">
-                                Disputed (False Claim)
-                              </span>
-                            )}
-                            <h3 className="font-extrabold text-sm text-gray-900 dark:text-white uppercase tracking-wide">
-                              {complaint.title}
-                            </h3>
-                          </div>
-                          <p className="text-[10px] text-gray-450 dark:text-slate-500 font-bold">
-                            Filed: {new Date(complaint.createdAt).toLocaleDateString()} at {new Date(complaint.createdAt).toLocaleTimeString()}
-                          </p>
-                        </div>
-                        <div className="flex gap-2 self-end sm:self-auto shrink-0 flex-wrap">
-                          {complaint.status === "disputed" && (
-                            <button
-                              onClick={() => handleRevokeDispute(complaint._id)}
-                              className="bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-white border border-amber-500/20 hover:border-amber-500 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-sm"
-                            >
-                              <ShieldAlert size={13} />
-                              Revoke Dispute
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDeleteComplaint(complaint._id)}
-                            className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 hover:border-red-500 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-sm"
-                          >
-                            <Trash2 size={13} />
-                            Cancel Complaint (Delete)
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <h4 className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">
-                          Description
-                        </h4>
-                        <p className="text-xs text-gray-700 dark:text-slate-350 leading-relaxed font-medium">
-                          {complaint.description}
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-gray-150 dark:border-slate-850/60">
-                        {/* Reported Worker */}
-                        <div className="space-y-1">
-                          <h4 className="text-[10px] font-black text-rose-500/80 uppercase tracking-wider flex items-center gap-1">
-                            <ShieldAlert size={12} />
-                            Reported Worker
-                          </h4>
-                          <div className="text-xs text-gray-700 dark:text-slate-300 space-y-0.5 font-bold">
-                            <p>Name: <span className="text-gray-900 dark:text-white">{complaint.worker_id?.name || "N/A"}</span></p>
-                            <p>Phone: <a href={`tel:${complaint.worker_id?.phone}`} className="text-blue-500 dark:text-orange-400 hover:underline">{complaint.worker_id?.phone || "N/A"}</a></p>
-                          </div>
-                        </div>
-
-                        {/* Reporting Client */}
-                        <div className="space-y-1 border-t sm:border-t-0 sm:border-l border-gray-200 dark:border-slate-800/80 pt-3 sm:pt-0 sm:pl-4">
-                          <h4 className="text-[10px] font-black text-blue-500/80 uppercase tracking-wider flex items-center gap-1">
-                            <Server size={12} />
-                            Reporting Client (Verify Claim)
-                          </h4>
-                          <div className="text-xs text-gray-700 dark:text-slate-300 space-y-0.5 font-bold">
-                            <p>Name: <span className="text-gray-900 dark:text-white">{complaint.user_id?.name || "N/A"}</span></p>
-                            <p>Phone: <a href={`tel:${complaint.user_id?.phone}`} className="text-blue-500 dark:text-orange-400 hover:underline">{complaint.user_id?.phone || "N/A"}</a></p>
-                            {complaint.user_id?.email && (
-                              <p>Email: <a href={`mailto:${complaint.user_id.email}`} className="text-blue-500 dark:text-orange-400 hover:underline">{complaint.user_id.email}</a></p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-        </main>
-
+        </div>
       </div>
     </div>
   );

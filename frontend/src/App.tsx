@@ -6,6 +6,7 @@ import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import LandingPage from "./pages/Landing";
 import SuperAdmin from "./pages/SuperAdmin";
+import VerifyAdmin from "./pages/VerifyAdmin";
 import Community from "./pages/Community";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import AIAssistantWidget from "./components/AIAssistantWidget";
@@ -27,6 +28,8 @@ function App() {
           <Route path='/community' element={<Community />} />
           <Route path='/' element={<LandingPage />} />
           <Route path='/super-admin' element={<SuperAdmin />} />
+          <Route path='/verify-admin' element={<VerifyAdmin />} />
+          <Route path='/admin' element={<VerifyAdmin />} />
         </Routes>
         <AIAssistantWidget />
       </BrowserRouter>

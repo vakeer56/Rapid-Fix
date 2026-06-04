@@ -86,7 +86,10 @@ const getWorkerReviews = async (req, res) => {
             .populate("user_id", "name photo")
             .sort({ createdAt: -1 });
 
-        const worker = await workersSchema.findById(workerId, "rating experience");
+        const worker = await workersSchema.findById(
+            workerId,
+            "rating experience isEmailVerified isPhoneVerified governmentVerification completedJobs createdAt"
+        );
         const complaintsSchema = require('../model/complaint.model');
         const complaintsCount = await complaintsSchema.countDocuments({ worker_id: workerId });
 
@@ -95,7 +98,9 @@ const getWorkerReviews = async (req, res) => {
             reviews,
             rating: worker?.rating || { totalSum: 0, totalCount: 0 },
             experience: worker?.experience || 0,
-            complaintsCount: complaintsCount || 0
+            complaintsCount: complaintsCount || 0,
+            badge: worker?.badge || { tier: "pending", label: "Verification Pending" },
+            completedJobs: worker?.completedJobs || 0
         });
     } catch (error) {
         console.error("[getWorkerReviews]", error);

@@ -2,25 +2,37 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import WorkerBadge from "../components/WorkerBadge";
 import { useAuth } from "../context/AuthContext";
 import api from "../service/api";
 import { auth } from "../config/firebase";
 import { sendPasswordResetEmail, RecaptchaVerifier, linkWithPhoneNumber } from "firebase/auth";
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  Users, 
-  Key, 
-  Save, 
-  ShieldAlert, 
+import {
+  User,
+  Mail,
+  Phone,
+  Calendar,
+  Users,
+  Key,
+  Save,
+  ShieldAlert,
   CheckCircle,
   MapPin,
   Trash2,
   Plus,
   Loader2,
-  Briefcase
+  Briefcase,
+  ShieldCheck,
+  BadgeCheck,
+  FileText,
+  UploadCloud,
+  Clock,
+  Camera,
+  ChevronRight,
+  Lock,
+  AlertTriangle,
+  X,
+  type LucideIcon
 } from "lucide-react";
 
 interface SavedAddress {
@@ -72,6 +84,71 @@ const INDIAN_STATES = [
   "Puducherry"
 ];
 
+// Shared style tokens for a consistent, professional SaaS look
+const CARD = "bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm";
+const INPUT = "w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all";
+const INPUT_ICON = "w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 pl-10 pr-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all";
+const LABEL = "block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5";
+
+// Per-document-type config: number field label, placeholder, formatting & validation
+interface DocTypeConfig {
+  numberLabel: string;
+  placeholder: string;
+  maxLength: number;
+  hint: string;
+  normalize: (v: string) => string;
+  validate: (v: string) => boolean;
+  error: string;
+}
+
+const DOC_TYPES: Record<string, DocTypeConfig> = {
+  "Aadhaar Card": {
+    numberLabel: "Aadhaar Number",
+    placeholder: "1234 5678 9012",
+    maxLength: 14, // 12 digits + 2 spaces
+    hint: "12-digit number as printed on your Aadhaar card.",
+    normalize: (v) => v.replace(/\D/g, "").slice(0, 12).replace(/(.{4})(?=.)/g, "$1 "),
+    validate: (v) => /^\d{12}$/.test(v.replace(/\D/g, "")),
+    error: "Enter a valid 12-digit Aadhaar number.",
+  },
+  "PAN Card": {
+    numberLabel: "PAN Number",
+    placeholder: "ABCDE1234F",
+    maxLength: 10,
+    hint: "10 characters: 5 letters, 4 digits, then 1 letter.",
+    normalize: (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10),
+    validate: (v) => /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v.toUpperCase()),
+    error: "Enter a valid PAN (e.g. ABCDE1234F).",
+  },
+  "Driving Licence": {
+    numberLabel: "Driving Licence Number",
+    placeholder: "TN0120231234567",
+    maxLength: 16,
+    hint: "State code + RTO + year + serial (e.g. TN0120231234567).",
+    normalize: (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16),
+    validate: (v) => /^[A-Z]{2}[0-9]{12,14}$/.test(v.toUpperCase().replace(/[^A-Z0-9]/g, "")),
+    error: "Enter a valid driving licence number (e.g. TN0120231234567).",
+  },
+  "Voter ID": {
+    numberLabel: "Voter ID (EPIC) Number",
+    placeholder: "ABC1234567",
+    maxLength: 10,
+    hint: "10 characters: 3 letters followed by 7 digits.",
+    normalize: (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10),
+    validate: (v) => /^[A-Z]{3}[0-9]{7}$/.test(v.toUpperCase()),
+    error: "Enter a valid Voter ID / EPIC number (e.g. ABC1234567).",
+  },
+  "Passport": {
+    numberLabel: "Passport Number",
+    placeholder: "A1234567",
+    maxLength: 8,
+    hint: "8 characters: 1 letter followed by 7 digits.",
+    normalize: (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8),
+    validate: (v) => /^[A-Z][0-9]{7}$/.test(v.toUpperCase()),
+    error: "Enter a valid passport number (e.g. A1234567).",
+  },
+};
+
 export default function Profile() {
   const { appUser, appToken, onAuthSuccess, signOut } = useAuth();
   const navigate = useNavigate();
@@ -90,6 +167,61 @@ export default function Profile() {
 
   const [photo, setPhoto] = useState<string>("");
   const [photoPreview, setPhotoPreview] = useState<string>(appUser?.photo || "");
+
+  // Worker government-document verification states
+  const [verification, setVerification] = useState<{
+    governmentVerification?: {
+      status: "none" | "pending" | "approved" | "rejected";
+      documentType?: string;
+      documentNumber?: string;
+      documentImages?: string[];
+      rejectionReason?: string;
+    };
+    badge?: { tier: string; label: string };
+  } | null>(null);
+  const [docType, setDocType] = useState<string>("Aadhaar Card");
+  const [docNumber, setDocNumber] = useState<string>("");
+  const [docFiles, setDocFiles] = useState<File[]>([]);
+  const [docPreviews, setDocPreviews] = useState<{ url: string; name: string; isImage: boolean }[]>([]);
+  const [docSubmitting, setDocSubmitting] = useState<boolean>(false);
+  const [docError, setDocError] = useState<string>("");
+  const [docSuccess, setDocSuccess] = useState<string>("");
+
+  const docCfg = DOC_TYPES[docType] || DOC_TYPES["Aadhaar Card"];
+
+  const handleDocTypeChange = (value: string) => {
+    setDocType(value);
+    setDocNumber("");
+    setDocError("");
+  };
+
+  const handleDocNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDocNumber(docCfg.normalize(e.target.value));
+    setDocError("");
+  };
+
+  const handleDocFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const incoming = Array.from(e.target.files || []);
+    e.target.value = ""; // allow re-selecting the same file
+    if (!incoming.length) return;
+    setDocError("");
+    setDocFiles((prev) => [...prev, ...incoming].slice(0, 3));
+    setDocPreviews((prev) =>
+      [
+        ...prev,
+        ...incoming.map((f) => ({ url: URL.createObjectURL(f), name: f.name, isImage: f.type.startsWith("image/") })),
+      ].slice(0, 3)
+    );
+  };
+
+  const removeDocFile = (index: number) => {
+    setDocPreviews((prev) => {
+      const target = prev[index];
+      if (target) URL.revokeObjectURL(target.url);
+      return prev.filter((_, i) => i !== index);
+    });
+    setDocFiles((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
@@ -112,6 +244,9 @@ export default function Profile() {
   const [editingField, setEditingField] = useState<"phone" | "email" | null>(null);
   const [editValue, setEditValue] = useState("");
   const [editError, setEditError] = useState("");
+
+  // Active settings section (SaaS-style left nav)
+  const [activeSection, setActiveSection] = useState<"profile" | "verification" | "addresses" | "security" | "danger">("profile");
 
   const openEditModal = (field: "phone" | "email") => {
     setEditingField(field);
@@ -150,21 +285,21 @@ export default function Profile() {
     setVerificationStep("sending");
     try {
       const formatPhone = `+91${form.phone}`;
-      
+
       // Clean up any old recaptcha container/verifier
       const oldContainer = document.getElementById("recaptcha-container");
       if (oldContainer) {
         oldContainer.innerHTML = "";
       }
-      
+
       const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
         size: "invisible",
       });
-      
+
       if (!auth.currentUser) {
         throw new Error("No active Firebase session found. Please re-login.");
       }
-      
+
       const confirmation = await linkWithPhoneNumber(auth.currentUser, formatPhone, verifier);
       setConfirmationResult(confirmation);
       setVerificationStep("otp_sent");
@@ -194,22 +329,22 @@ export default function Profile() {
       if (!confirmationResult) {
         throw new Error("No active verification session found. Please request a new code.");
       }
-      
+
       await confirmationResult.confirm(verificationCode);
-      
+
       const idToken = await auth.currentUser?.getIdToken(true);
       if (!idToken) {
         throw new Error("Failed to retrieve updated credentials from Firebase.");
       }
-      
+
       const res = await api.put("/auth/verify-phone", { idToken });
-      
+
       if (res.data && res.data.success) {
         setPhoneSuccess("Phone number verified successfully!");
         setVerificationStep("idle");
         setVerificationCode("");
         setConfirmationResult(null);
-        
+
         if (appToken && res.data.user) {
           onAuthSuccess(appToken, res.data.user);
         }
@@ -302,12 +437,12 @@ export default function Profile() {
         const data = res.data;
         if (data && data[0] && data[0].Status === "Success" && data[0].PostOffice?.length > 0) {
           const office = data[0].PostOffice[0];
-          
+
           let matchedState = office.State;
           if (matchedState.toLowerCase() === "tamilnadu") {
             matchedState = "Tamil Nadu";
           }
-          
+
           const standardState = INDIAN_STATES.find(
             s => s.toLowerCase().replace(/\s+/g, "") === matchedState.toLowerCase().replace(/\s+/g, "")
           ) || matchedState;
@@ -375,6 +510,70 @@ export default function Profile() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appUser?._id, appUser?.role]);
+
+  useEffect(() => {
+    if (appUser?._id && appUser?.role === "worker") {
+      fetchVerification();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appUser?._id, appUser?.role]);
+
+  const fetchVerification = async () => {
+    try {
+      const res = await api.get("/verification/me");
+      if (res.data && res.data.success) {
+        setVerification({
+          governmentVerification: res.data.governmentVerification,
+          badge: res.data.badge,
+        });
+      }
+    } catch (err) {
+      console.warn("Verification status fetch failed/skipped:", err);
+    }
+  };
+
+  const handleSubmitDocs = async (e: FormEvent) => {
+    e.preventDefault();
+    setDocError("");
+    setDocSuccess("");
+    if (!docNumber.trim()) {
+      setDocError(`Please enter your ${docCfg.numberLabel}.`);
+      return;
+    }
+    if (!docCfg.validate(docNumber)) {
+      setDocError(docCfg.error);
+      return;
+    }
+    if (docFiles.length === 0) {
+      setDocError("Please upload at least one clear image of your document.");
+      return;
+    }
+    setDocSubmitting(true);
+    try {
+      const data = new FormData();
+      data.append("documentType", docType);
+      data.append("documentNumber", docNumber.trim());
+      docFiles.forEach((file) => data.append("documents", file));
+
+      // Let the browser set the multipart boundary automatically
+      const res = await api.post("/verification/submit", data);
+      if (res.data && res.data.success) {
+        setVerification({
+          governmentVerification: res.data.governmentVerification,
+          badge: res.data.badge,
+        });
+        setDocNumber("");
+        docPreviews.forEach((p) => URL.revokeObjectURL(p.url));
+        setDocPreviews([]);
+        setDocFiles([]);
+        setDocSuccess(res.data.message || "Documents submitted successfully.");
+      }
+    } catch (err: any) {
+      setDocError(err?.response?.data?.message || "Failed to submit documents.");
+    } finally {
+      setDocSubmitting(false);
+    }
+  };
 
   const fetchAddresses = async () => {
     setAddressLoading(true);
@@ -556,177 +755,191 @@ export default function Profile() {
   const getProviderBadge = () => {
     if (appUser?.firebaseUid) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 rounded-full border border-blue-200 dark:border-blue-800">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 rounded-full border border-blue-200 dark:border-blue-800">
           Google / Firebase
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 rounded-full border border-amber-200 dark:border-amber-800">
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 rounded-full border border-amber-200 dark:border-amber-800">
         SMS OTP (Twilio)
       </span>
     );
   };
 
+  const isWorker = appUser?.role === "worker";
+
+  const navItems: { id: typeof activeSection; label: string; icon: LucideIcon; danger?: boolean }[] = [
+    { id: "profile", label: "Profile", icon: User },
+    ...(isWorker ? [{ id: "verification" as const, label: "Verification", icon: BadgeCheck }] : []),
+    ...(!isWorker ? [{ id: "addresses" as const, label: "Addresses", icon: MapPin }] : []),
+    { id: "security", label: "Security", icon: Lock },
+    { id: "danger", label: "Delete Account", icon: Trash2, danger: true },
+  ];
+
+  // Small reusable verified / pending pill for email & phone
+  const verifyPill = (verified: boolean) =>
+    verified ? (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/20 whitespace-nowrap shrink-0">
+        <CheckCircle size={10} /> Verified
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-500/20 whitespace-nowrap shrink-0">
+        <ShieldAlert size={10} /> Pending
+      </span>
+    );
+
   return (
-    <div className="min-h-screen flex flex-col bg-transparent text-slate-900 dark:text-white transition-colors duration-300">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
       <Navbar />
 
-      <main className="flex-grow pt-28 pb-16 px-6 md:px-16 max-w-4xl mx-auto w-full">
-        {/* Header copy */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Account Settings</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            Manage your personal profile details, authentication options, and security settings.
-          </p>
-        </div>
-
-        {/* Outer Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Left panel: Info summary */}
-          <div className="md:col-span-1 space-y-6">
-            <div className="glass-panel rounded-3xl p-6 text-center shadow-sm">
-              <div className="relative w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-blue-500/25 overflow-hidden shrink-0 group">
-                {photoPreview ? (
-                  <img src={photoPreview} alt={form.name} className="w-full h-full object-cover" />
-                ) : (
-                  form.name?.[0]?.toUpperCase() || "U"
-                )}
-                {/* Upload camera hover overlay */}
-                <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold cursor-pointer transition-all">
-                  <Plus size={16} className="mb-0.5" />
-                  Change
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoChange}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">{form.name || "User"}</h2>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 truncate">{form.email}</p>
-
-              <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 text-left space-y-3.5">
-                <div>
-                  <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Auth Method</p>
-                  <div className="mt-1">{getProviderBadge()}</div>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Account ID</p>
-                  <p className="text-xs font-mono text-slate-500 dark:text-slate-400 break-all mt-1">
-                    {appUser?._id}
-                  </p>
-                </div>
-              </div>
-            </div>
+      <main className="flex-grow pt-28 pb-16 px-4 sm:px-6 lg:px-10 max-w-6xl mx-auto w-full">
+        {/* Page header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Account Settings</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Manage your profile, {isWorker ? "verification" : "saved addresses"}, and security preferences.
+            </p>
           </div>
 
-          {/* Right panel: Forms */}
-          <div className="md:col-span-2 space-y-6">
-            {/* Success / Error Banners */}
+          <div className={`flex items-center gap-3 ${CARD} px-4 py-2.5`}>
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
+              {photoPreview ? (
+                <img src={photoPreview} alt={form.name} className="w-full h-full object-cover" />
+              ) : (
+                form.name?.[0]?.toUpperCase() || "U"
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[160px]">{form.name || "User"}</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 capitalize">{isWorker ? "Service Partner" : "Customer"}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6 lg:gap-8 items-start">
+          {/* Left navigation */}
+          <nav className={`${CARD} p-2 flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible lg:sticky lg:top-28`}>
+            {navItems.map((item) => {
+              const active = activeSection === item.id;
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveSection(item.id)}
+                  className={`group flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                    active
+                      ? item.danger
+                        ? "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
+                        : "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300"
+                      : item.danger
+                      ? "text-red-500/80 hover:bg-red-50 dark:hover:bg-red-950/20"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <Icon size={16} className="shrink-0" />
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {active && <ChevronRight size={14} className="hidden lg:block opacity-70" />}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Content */}
+          <div className="space-y-6 min-w-0">
+            {/* Global banners */}
             {error && (
-              <div className="flex items-center gap-3 text-red-500 text-sm bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-2xl px-4 py-3">
+              <div className="flex items-center gap-3 text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-xl px-4 py-3">
                 <ShieldAlert size={18} className="shrink-0" />
                 <span>{error}</span>
               </div>
             )}
             {success && (
-              <div className="flex items-center gap-3 text-emerald-500 text-sm bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 rounded-2xl px-4 py-3">
+              <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400 text-sm bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 rounded-xl px-4 py-3">
                 <CheckCircle size={18} className="shrink-0" />
                 <span>{success}</span>
               </div>
             )}
 
-            {/* Profile editing card */}
-            <div className="glass-panel rounded-3xl p-6 sm:p-8 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <User size={18} className="text-blue-500" />
-                Personal Details
-              </h3>
-
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Full Name</label>
-                    <div className="relative">
-                      <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        value={form.name}
-                        onChange={setField("name")}
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
-                        required
-                      />
-                    </div>
+            {/* ───────────────────────── PROFILE ───────────────────────── */}
+            {activeSection === "profile" && (
+              <div className={`${CARD} p-6 sm:p-8`}>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                    <User size={18} />
                   </div>
-
                   <div>
-                    <div className="flex items-center gap-2 mb-1.5 ml-0.5">
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">Email Address</label>
-                      {form.email === appUser?.email && appUser?.isEmailVerified ? (
-                        <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-500/20 whitespace-nowrap shrink-0">
-                          <CheckCircle size={10} /> Verified
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-500/20 whitespace-nowrap shrink-0">
-                          <ShieldAlert size={10} /> Pending Verification
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="relative flex-grow">
-                        <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="email"
-                          value={form.email}
-                          readOnly
-                          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 placeholder-slate-400 outline-none transition-all text-sm select-none"
-                          required
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => openEditModal("email")}
-                        className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer select-none shrink-0"
-                      >
-                        Edit
-                      </button>
-                    </div>
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white">Personal Details</h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Your basic account information.</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-3 sm:col-span-2">
-                    <div className="flex items-center gap-2 mb-1.5 ml-0.5">
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">Phone</label>
-                      {form.phone === appUser?.phone && appUser?.isPhoneVerified ? (
-                        <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-500/20 whitespace-nowrap shrink-0">
-                          <CheckCircle size={10} /> Verified
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-500/20 whitespace-nowrap shrink-0">
-                          <ShieldAlert size={10} /> Pending Verification
-                        </span>
-                      )}
+                {/* Avatar uploader */}
+                <div className="flex items-center gap-5 mb-7 pb-7 border-b border-slate-100 dark:border-slate-800">
+                  <div className="relative w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white text-2xl font-bold shadow-md overflow-hidden shrink-0 group">
+                    {photoPreview ? (
+                      <img src={photoPreview} alt={form.name} className="w-full h-full object-cover" />
+                    ) : (
+                      form.name?.[0]?.toUpperCase() || "U"
+                    )}
+                    <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white cursor-pointer">
+                      <Camera size={18} />
+                      <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+                    </label>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">Profile photo</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 mb-2">PNG or JPG, up to 5MB.</p>
+                    <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 cursor-pointer hover:underline">
+                      <UploadCloud size={13} /> Upload new photo
+                      <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+                    </label>
+                  </div>
+                </div>
+
+                <form onSubmit={handleUpdateProfile} className="space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Name */}
+                    <div>
+                      <label className={LABEL}>Full Name</label>
+                      <div className="relative">
+                        <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input type="text" value={form.name} onChange={setField("name")} className={INPUT_ICON} required />
+                      </div>
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Email Address</label>
+                        {verifyPill(form.email === appUser?.email && !!appUser?.isEmailVerified)}
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="relative flex-grow">
+                          <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input type="email" value={form.email} readOnly className={`${INPUT_ICON} bg-slate-50 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 select-none`} required />
+                        </div>
+                        <button type="button" onClick={() => openEditModal("email")} className="shrink-0 px-3.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all cursor-pointer">
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Phone */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Phone Number</label>
+                      {verifyPill(form.phone === appUser?.phone && !!appUser?.isPhoneVerified)}
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <div className="relative flex-grow">
                         <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="tel"
-                          value={form.phone}
-                          readOnly
-                          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 placeholder-slate-400 outline-none transition-all text-sm select-none"
-                          required
-                        />
+                        <input type="tel" value={form.phone} readOnly className={`${INPUT_ICON} bg-slate-50 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 select-none`} required />
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => openEditModal("phone")}
-                          className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer select-none shrink-0"
-                        >
+                        <button type="button" onClick={() => openEditModal("phone")} className="px-3.5 py-2.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all cursor-pointer">
                           Edit
                         </button>
                         {(form.phone !== appUser?.phone || !appUser?.isPhoneVerified) && (
@@ -734,16 +947,9 @@ export default function Profile() {
                             type="button"
                             onClick={handleSendOTP}
                             disabled={verificationStep !== "idle" || form.phone.length !== 10}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1 shrink-0 cursor-pointer whitespace-nowrap"
+                            className="px-4 py-2.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                           >
-                            {verificationStep === "sending" ? (
-                              <>
-                                <Loader2 size={12} className="animate-spin" />
-                                Sending...
-                              </>
-                            ) : (
-                              "Verify via SMS"
-                            )}
+                            {verificationStep === "sending" ? (<><Loader2 size={12} className="animate-spin" /> Sending…</>) : "Verify via SMS"}
                           </button>
                         )}
                       </div>
@@ -752,557 +958,579 @@ export default function Profile() {
                     <div id="recaptcha-container" className="mt-2"></div>
 
                     {phoneError && (
-                      <p className="text-xs text-rose-500 mt-2 font-medium bg-rose-500/10 px-3 py-2 rounded-xl border border-rose-500/20">
-                        {phoneError}
-                      </p>
+                      <p className="text-xs text-rose-500 mt-2 font-medium bg-rose-500/10 px-3 py-2 rounded-lg border border-rose-500/20">{phoneError}</p>
                     )}
                     {phoneSuccess && (
-                      <p className="text-xs text-emerald-500 mt-2 font-medium bg-emerald-500/10 px-3 py-2 rounded-xl border border-emerald-500/20">
-                        {phoneSuccess}
-                      </p>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20">{phoneSuccess}</p>
                     )}
 
                     {(verificationStep === "otp_sent" || verificationStep === "verifying") && (
-                      <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl animate-fade-in">
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                          Enter 6-Digit SMS Verification Code
-                        </label>
+                      <div className="mt-3 p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl animate-fade-in">
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Enter 6-Digit SMS Code</label>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             maxLength={6}
-                            placeholder="Enter Code"
+                            placeholder="000000"
                             value={verificationCode}
                             onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                            className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 w-full text-center tracking-widest font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-grow text-center tracking-[0.4em] font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                           />
                           <button
                             type="button"
                             onClick={handleVerifyOTP}
                             disabled={verificationStep === "verifying" || verificationCode.length !== 6}
-                            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                            className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white transition-all active:scale-95 flex items-center justify-center gap-1 shrink-0 cursor-pointer"
                           >
-                            {verificationStep === "verifying" ? (
-                              <Loader2 size={12} className="animate-spin" />
-                            ) : (
-                              "Verify Code"
-                            )}
+                            {verificationStep === "verifying" ? <Loader2 size={12} className="animate-spin" /> : "Verify Code"}
                           </button>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="col-span-3 sm:col-span-1">
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Age</label>
-                    <div className="relative">
-                      <Calendar size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="number"
-                        value={form.age}
-                        onChange={setField("age")}
-                        min="16"
-                        max="100"
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-span-3 sm:col-span-1">
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Gender</label>
-                    <div className="relative">
-                      <Users size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <select
-                        value={form.gender}
-                        onChange={setField("gender")}
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm appearance-none cursor-pointer"
-                        required
-                      >
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                        <option value="prefer_not">Prefer not</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {appUser?.role === "worker" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Age */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Experience (Years)</label>
+                      <label className={LABEL}>Age</label>
                       <div className="relative">
-                        <Briefcase size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="number"
-                          value={form.experience}
-                          onChange={setField("experience")}
-                          min="0"
-                          max="80"
-                          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
-                          required
-                        />
+                        <Calendar size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input type="number" value={form.age} onChange={setField("age")} min="16" max="100" className={INPUT_ICON} required />
                       </div>
                     </div>
-                  )}
-                </div>
 
-                {appUser?.role === "worker" && (
-                  <>
+                    {/* Gender */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 ml-0.5">Located Address</label>
+                      <label className={LABEL}>Gender</label>
                       <div className="relative">
-                        <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          value={form.located_address}
-                          onChange={setField("located_address")}
-                          className="w-full pl-9 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
-                          placeholder="e.g. Dwarka, Tiruvannamalai, Tamil Nadu - 606603"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Preferred Locations */}
-                      <div className="space-y-2">
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 ml-0.5">
-                          Preferred Locations (At least one)
-                        </label>
-                        <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
-                          {preferredAreas.map((area, index) => (
-                            <div key={index} className="flex items-center gap-2">
-                              <div className="relative flex-grow">
-                                <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input
-                                  type="text"
-                                  required={index === 0}
-                                  placeholder={index === 0 ? "e.g. City Name or District (Compulsory)" : "e.g. Popular Area Name (Optional)"}
-                                  value={area}
-                                  onChange={(e) => handlePreferredAreaChange(index, e.target.value)}
-                                  className="w-full pl-9 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium"
-                                />
-                              </div>
-                              {preferredAreas.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => removePreferredArea(index)}
-                                  className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-red-500/10 hover:border-red-500/30 text-slate-400 hover:text-red-550 dark:hover:text-red-400 transition-all cursor-pointer active:scale-95 shrink-0"
-                                  title="Remove location"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={addPreferredArea}
-                          className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-orange-500 bg-slate-50 dark:bg-slate-900/20 hover:bg-slate-100 dark:hover:bg-slate-900/40 text-slate-550 dark:text-slate-400 hover:text-blue-600 dark:hover:text-orange-400 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer active:scale-[0.98]"
-                        >
-                          <Plus size={13} />
-                          Add Place
-                        </button>
-                      </div>
-
-                      {/* Trade Categories */}
-                      <div className="space-y-2">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 ml-0.5">
-                          Trade Categories (Select all that apply)
-                        </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {[
-                            { id: "Plumber", label: "Plumber 🪠" },
-                            { id: "Electrician", label: "Electrician ⚡" },
-                            { id: "Mechanic", label: "Mechanic ⚙️" },
-                            { id: "Technician", label: "Technician 🖥️" },
-                            { id: "Other", label: "Other 🛠️" },
-                          ].map((cat) => {
-                            const isSelected = selectedCategories.includes(cat.id);
-                            return (
-                              <button
-                                key={cat.id}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedCategories((prev) =>
-                                    prev.includes(cat.id)
-                                      ? prev.filter((c) => c !== cat.id)
-                                      : [...prev, cat.id]
-                                  );
-                                }}
-                                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-extrabold transition-all duration-200 active:scale-[0.97] cursor-pointer select-none ${
-                                  isSelected
-                                    ? cat.id === "Plumber" ? "bg-blue-500/20 border-blue-500 text-blue-600 dark:text-blue-400 shadow-md shadow-blue-500/10 animate-scale-up"
-                                      : cat.id === "Electrician" ? "bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400 shadow-md shadow-amber-500/10 animate-scale-up"
-                                      : cat.id === "Mechanic" ? "bg-purple-500/20 border-purple-500 text-purple-600 dark:text-purple-400 shadow-md shadow-purple-500/10 animate-scale-up"
-                                      : cat.id === "Technician" ? "bg-emerald-500/20 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-md shadow-emerald-500/10 animate-scale-up"
-                                      : "bg-orange-600/20 border-orange-500 text-orange-600 dark:text-orange-400 shadow-md shadow-orange-500/10 animate-scale-up"
-                                    : "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                                }`}
-                              >
-                                {cat.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-900 dark:bg-orange-600 hover:bg-blue-800 dark:hover:bg-orange-500 text-white font-bold text-sm shadow-md active:scale-[0.98] transition-all cursor-pointer"
-                  >
-                    <Save size={16} />
-                    {loading ? "Saving Changes…" : "Save Changes"}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Saved Addresses Card */}
-            <div className="glass-panel rounded-3xl p-6 sm:p-8 shadow-sm">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-500">
-                    <MapPin size={18} className="animate-pulse" />
-                  </div>
-                  Address Book
-                </h3>
-                {!showAddAddress && (
-                  <button
-                    onClick={() => setShowAddAddress(true)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700 hover:border-orange-500/30 dark:hover:border-orange-500/30 transition-all cursor-pointer shadow-sm active:scale-[0.97]"
-                  >
-                    <Plus size={14} /> Add New
-                  </button>
-                )}
-              </div>
-
-              {addressError && (
-                <div className="mb-4 text-xs text-red-500 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-xl px-3 py-2 flex items-center gap-2">
-                  <ShieldAlert size={14} className="shrink-0" />
-                  <span>{addressError}</span>
-                </div>
-              )}
-
-              {addressSuccess && (
-                <div className="mb-4 text-xs text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 rounded-xl px-3 py-2 flex items-center gap-2">
-                  <CheckCircle size={14} className="shrink-0" />
-                  <span>{addressSuccess}</span>
-                </div>
-              )}
-
-              {showAddAddress ? (
-                <form onSubmit={handleAddAddress} className="space-y-4 border border-slate-100 dark:border-slate-800/80 rounded-2xl p-5 bg-slate-50/40 dark:bg-slate-900/60 shadow-inner">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
-                    <MapPin size={12} className="text-orange-500" />
-                    New Address Profile
-                  </h4>
-                  
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1 ml-0.5">Street Address / Door No.</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Flat 302, Green Apartments"
-                      value={newAddress.address}
-                      onChange={(e) => setNewAddress(prev => ({ ...prev, address: e.target.value }))}
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500/40 focus:border-transparent outline-none transition-all text-xs"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1 ml-0.5">Area / Locality</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Sector 12"
-                        value={newAddress.area}
-                        onChange={(e) => setNewAddress(prev => ({ ...prev, area: e.target.value }))}
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500/40 focus:border-transparent outline-none transition-all text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1 ml-0.5">City</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Dwarka"
-                        value={newAddress.city}
-                        onChange={(e) => setNewAddress(prev => ({ ...prev, city: e.target.value }))}
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500/40 focus:border-transparent outline-none transition-all text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1 ml-0.5 flex items-center gap-1.5">
-                        Pin Code
-                        {pincodeLoading && <Loader2 size={10} className="animate-spin text-orange-500 shrink-0" />}
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. 606603"
-                        maxLength={6}
-                        value={newAddress.pin_code}
-                        onChange={(e) => handlePincodeChange(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500/40 focus:border-transparent outline-none transition-all text-xs font-semibold text-orange-600 dark:text-orange-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1 ml-0.5">District</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Tiruvannamalai"
-                        value={newAddress.district}
-                        onChange={(e) => setNewAddress(prev => ({ ...prev, district: e.target.value }))}
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500/40 focus:border-transparent outline-none transition-all text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1 ml-0.5">State</label>
-                      <div className="relative">
-                        <select
-                          required
-                          value={newAddress.state}
-                          onChange={(e) => setNewAddress(prev => ({ ...prev, state: e.target.value }))}
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-orange-500/40 focus:border-transparent outline-none transition-all text-xs appearance-none cursor-pointer font-medium"
-                        >
-                          <option value="" disabled className="text-slate-400">Select State</option>
-                          {INDIAN_STATES.map((st) => (
-                            <option key={st} value={st} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
-                              {st}
-                            </option>
-                          ))}
+                        <Users size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                        <select value={form.gender} onChange={setField("gender")} className={`${INPUT_ICON} appearance-none cursor-pointer`} required>
+                          <option value="">Select…</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                          <option value="prefer_not">Prefer not</option>
                         </select>
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[10px]">▼</div>
                       </div>
                     </div>
+
+                    {/* Experience (worker) */}
+                    {isWorker && (
+                      <div>
+                        <label className={LABEL}>Experience (Years)</label>
+                        <div className="relative">
+                          <Briefcase size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input type="number" value={form.experience} onChange={setField("experience")} min="0" max="80" className={INPUT_ICON} required />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex justify-end gap-2.5 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddAddress(false)}
-                      className="px-4 py-2 rounded-xl text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer active:scale-[0.97]"
-                    >
-                      Cancel
-                    </button>
+                  {isWorker && (
+                    <>
+                      <div>
+                        <label className={LABEL}>Located Address</label>
+                        <div className="relative">
+                          <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={form.located_address}
+                            onChange={setField("located_address")}
+                            className={INPUT_ICON}
+                            placeholder="e.g. Dwarka, Tiruvannamalai, Tamil Nadu - 606603"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {/* Preferred Locations */}
+                        <div>
+                          <label className={LABEL}>Preferred Locations <span className="text-slate-400 font-normal">(at least one)</span></label>
+                          <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                            {preferredAreas.map((area, index) => (
+                              <div key={index} className="flex items-center gap-2">
+                                <div className="relative flex-grow">
+                                  <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    type="text"
+                                    required={index === 0}
+                                    placeholder={index === 0 ? "City or District (required)" : "Area name (optional)"}
+                                    value={area}
+                                    onChange={(e) => handlePreferredAreaChange(index, e.target.value)}
+                                    className={INPUT_ICON}
+                                  />
+                                </div>
+                                {preferredAreas.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removePreferredArea(index)}
+                                    className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 dark:hover:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all cursor-pointer shrink-0"
+                                    title="Remove location"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={addPreferredArea}
+                            className="mt-2 w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                          >
+                            <Plus size={13} /> Add Location
+                          </button>
+                        </div>
+
+                        {/* Trade Categories */}
+                        <div>
+                          <label className={LABEL}>Trade Categories <span className="text-slate-400 font-normal">(select all that apply)</span></label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {[
+                              { id: "Plumber", label: "Plumber 🪠" },
+                              { id: "Electrician", label: "Electrician ⚡" },
+                              { id: "Mechanic", label: "Mechanic ⚙️" },
+                              { id: "Technician", label: "Technician 🖥️" },
+                              { id: "Other", label: "Other 🛠️" },
+                            ].map((cat) => {
+                              const isSelected = selectedCategories.includes(cat.id);
+                              return (
+                                <button
+                                  key={cat.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedCategories((prev) =>
+                                      prev.includes(cat.id) ? prev.filter((c) => c !== cat.id) : [...prev, cat.id]
+                                    );
+                                  }}
+                                  className={`py-2.5 px-3 rounded-lg border text-xs font-bold transition-all active:scale-[0.97] cursor-pointer ${
+                                    isSelected
+                                      ? "bg-indigo-50 dark:bg-indigo-500/15 border-indigo-300 dark:border-indigo-500/40 text-indigo-700 dark:text-indigo-300"
+                                      : "bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600"
+                                  }`}
+                                >
+                                  {cat.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 pt-4">
+                      <span className="font-semibold">Sign-in method:</span> {getProviderBadge()}
+                    </div>
                     <button
                       type="submit"
-                      disabled={addressLoading}
-                      className="px-5 py-2 rounded-xl bg-blue-900 dark:bg-orange-600 hover:bg-blue-800 dark:hover:bg-orange-500 text-white font-bold text-xs shadow-sm active:scale-[0.97] transition-all cursor-pointer flex items-center gap-1.5"
+                      disabled={loading}
+                      className="mt-4 inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold text-sm shadow-sm active:scale-[0.98] transition-all cursor-pointer"
                     >
-                      {addressLoading && <Loader2 size={12} className="animate-spin" />}
-                      Save Address
+                      {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      {loading ? "Saving…" : "Save Changes"}
                     </button>
                   </div>
                 </form>
-              ) : (
-                <div className="space-y-3">
-                  {addressLoading && addresses.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-                      <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
-                      <p className="text-xs mt-2">Loading your address profiles...</p>
+              </div>
+            )}
+
+            {/* ─────────────────────── VERIFICATION ─────────────────────── */}
+            {activeSection === "verification" && isWorker && (() => {
+              const tier = verification?.badge?.tier || appUser?.badge?.tier || "pending";
+              const gov = verification?.governmentVerification;
+              const govStatus = gov?.status || "none";
+              const emailPhoneVerified = tier !== "pending";
+
+              return (
+                <div className={`${CARD} p-6 sm:p-8`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                        <BadgeCheck size={18} />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-slate-900 dark:text-white">Request Verification</h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Earn trust badges by verifying your identity.</p>
+                      </div>
                     </div>
-                  ) : addresses.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30">
-                      <MapPin size={24} className="mb-2 text-slate-300 dark:text-slate-700" />
-                      <p className="text-xs font-bold">No saved addresses</p>
-                      <p className="text-[10px] text-slate-400 mt-1 max-w-[220px] text-center leading-relaxed">Add a profile to easily select it during service requests.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-3.5">
-                      {addresses.map((addr) => (
-                        <div
-                          key={addr._id}
-                          className="group relative flex items-start justify-between p-4.5 rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/40 hover:border-orange-500/30 dark:hover:border-orange-500/30 hover:bg-slate-50/70 dark:hover:bg-slate-900/80 shadow-sm hover:shadow transition-all duration-300"
-                        >
-                          <div className="flex gap-4">
-                            <div className="mt-1 p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 shrink-0 flex items-center justify-center shadow-inner">
-                              <MapPin size={16} />
-                            </div>
-                            <div className="pr-12">
-                              <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight capitalize">
-                                {addr.address}
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 capitalize">
-                                {addr.area}, {addr.city}
-                              </p>
-                              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 uppercase font-medium tracking-wide">
-                                {addr.district}, {addr.state} - <strong className="font-semibold text-orange-600 dark:text-orange-400 font-mono text-xs ml-0.5">{addr.pin_code}</strong>
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteAddress(addr._id)}
-                            className="p-2.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 border border-transparent hover:border-red-100 dark:hover:border-red-900/40 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer absolute right-4 top-1/2 -translate-y-1/2 shadow-sm"
-                            title="Delete Address"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                    <WorkerBadge badge={verification?.badge || appUser?.badge} size="sm" />
+                  </div>
+
+                  {/* Trust ladder */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
+                    {[
+                      { t: "verified", label: "Verified", req: "Email + phone" },
+                      { t: "verified_pro", label: "Verified Pro", req: "Gov. document" },
+                      { t: "trusted_pro", label: "Trusted Pro", req: "4.5★ · 35 jobs" },
+                      { t: "trusted_elite", label: "Trusted Elite", req: "4.8★ · 100 jobs" },
+                    ].map((step) => {
+                      const order = ["verified", "verified_pro", "trusted_pro", "trusted_elite"];
+                      const reached = order.indexOf(tier) >= order.indexOf(step.t);
+                      return (
+                        <div key={step.t} className={`rounded-xl border p-3 text-center ${reached ? "border-emerald-300 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10" : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30"}`}>
+                          <p className={`text-[11px] font-extrabold ${reached ? "text-emerald-700 dark:text-emerald-300" : "text-slate-500 dark:text-slate-400"}`}>{step.label}</p>
+                          <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">{step.req}</p>
                         </div>
-                      ))}
+                      );
+                    })}
+                  </div>
+
+                  {!emailPhoneVerified && (
+                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-4 text-xs text-amber-700 dark:text-amber-300 leading-relaxed flex items-start gap-2">
+                      <ShieldAlert size={15} className="mt-0.5 shrink-0" />
+                      <span>Verify both your <strong>email</strong> and <strong>phone number</strong> in the Profile tab before requesting document verification.</span>
                     </div>
                   )}
+
+                  {emailPhoneVerified && govStatus === "approved" && (
+                    <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 rounded-xl p-4 text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed flex items-start gap-2">
+                      <ShieldCheck size={15} className="mt-0.5 shrink-0" />
+                      <span>Your <strong>{gov?.documentType || "document"}</strong> has been verified and approved. You are a <strong>Verified Pro</strong>.</span>
+                    </div>
+                  )}
+
+                  {emailPhoneVerified && govStatus === "pending" && (
+                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-4 text-xs text-amber-700 dark:text-amber-300 leading-relaxed flex items-start gap-2">
+                      <Clock size={15} className="mt-0.5 shrink-0" />
+                      <span>Your <strong>{gov?.documentType || "document"}</strong> is under review. We'll update your badge once an administrator approves it.</span>
+                    </div>
+                  )}
+
+                  {emailPhoneVerified && (govStatus === "none" || govStatus === "rejected") && (
+                    <form onSubmit={handleSubmitDocs} className="space-y-4">
+                      {govStatus === "rejected" && (
+                        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-xl p-3 text-xs text-red-600 dark:text-red-300 leading-relaxed flex items-start gap-2">
+                          <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+                          <span>Your previous submission failed{gov?.rejectionReason ? `: ${gov.rejectionReason}` : "."} Please resubmit valid documents.</span>
+                        </div>
+                      )}
+                      {docError && <div className="text-xs text-rose-500 bg-rose-500/10 border border-rose-500/20 px-3.5 py-2.5 rounded-lg font-medium">{docError}</div>}
+                      {docSuccess && <div className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-2.5 rounded-lg font-medium">{docSuccess}</div>}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className={LABEL}>Document Type</label>
+                          <div className="relative">
+                            <FileText size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                            <select value={docType} onChange={(e) => handleDocTypeChange(e.target.value)} className={`${INPUT_ICON} appearance-none cursor-pointer`}>
+                              {Object.keys(DOC_TYPES).map((t) => (
+                                <option key={t}>{t}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className={LABEL}>{docCfg.numberLabel}</label>
+                          <input
+                            type="text"
+                            inputMode={docType === "Aadhaar Card" ? "numeric" : "text"}
+                            value={docNumber}
+                            onChange={handleDocNumberChange}
+                            maxLength={docCfg.maxLength}
+                            placeholder={docCfg.placeholder}
+                            className={`${INPUT} ${docNumber && !docCfg.validate(docNumber) ? "border-rose-400 dark:border-rose-500/60 focus:ring-rose-500/40 focus:border-rose-500" : ""}`}
+                            autoComplete="off"
+                          />
+                          <p className={`mt-1 text-[10px] ${docNumber && !docCfg.validate(docNumber) ? "text-rose-500" : "text-slate-400"}`}>
+                            {docNumber && !docCfg.validate(docNumber) ? docCfg.error : docCfg.hint}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className={LABEL}>Document Images <span className="text-slate-400 font-normal">(up to 3)</span></label>
+
+                        {/* Selected file previews */}
+                        {docPreviews.length > 0 && (
+                          <div className="flex flex-wrap gap-3 mb-3">
+                            {docPreviews.map((p, i) => (
+                              <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 group">
+                                {p.isImage ? (
+                                  <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 p-1">
+                                    <FileText size={20} />
+                                    <span className="text-[8px] text-center mt-1 truncate w-full">{p.name}</span>
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => removeDocFile(i)}
+                                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-slate-900/70 hover:bg-red-600 text-white flex items-center justify-center transition-colors"
+                                  aria-label="Remove file"
+                                >
+                                  <X size={11} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {docFiles.length < 3 && (
+                          <label className="flex flex-col items-center justify-center gap-1.5 w-full bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-300 dark:border-slate-700 rounded-xl px-3 py-6 text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">
+                            <UploadCloud size={20} className="text-indigo-500" />
+                            <span className="font-semibold">{docFiles.length > 0 ? `Add another (${docFiles.length}/3)` : "Click to upload document image(s)"}</span>
+                            <span className="text-[10px] text-slate-400">JPG, PNG or PDF</span>
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              multiple
+                              className="hidden"
+                              onChange={handleDocFilesChange}
+                            />
+                          </label>
+                        )}
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={docSubmitting}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold text-sm shadow-sm active:scale-[0.98] transition-all cursor-pointer"
+                      >
+                        {docSubmitting ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+                        {docSubmitting ? "Submitting…" : "Submit for Verification"}
+                      </button>
+                    </form>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
 
-            {/* Password security card (only useful if using Firebase Auth) */}
-            <div className="glass-panel rounded-3xl p-6 sm:p-8 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                <Key size={18} className="text-orange-500" />
-                Security & Passwords
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-6">
-                Request a password reset email to change your login credentials via secure Firebase links.
-              </p>
-
-              {resetSuccess ? (
-                <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400 rounded-2xl p-4 flex items-start gap-3">
-                  <CheckCircle size={18} className="shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-bold text-sm">Reset Email Dispatched!</h4>
-                    <p className="text-xs mt-1 leading-relaxed">
-                      We have sent a password reset link to <strong className="font-semibold">{form.email}</strong>. 
-                      Please verify your inbox and spam filters to reset.
-                    </p>
+            {/* ───────────────────────── ADDRESSES ───────────────────────── */}
+            {activeSection === "addresses" && !isWorker && (
+              <div className={`${CARD} p-6 sm:p-8`}>
+                <div className="flex items-center justify-between gap-3 mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                      <MapPin size={18} />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white">Address Book</h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Saved addresses for faster service requests.</p>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handlePasswordReset}
-                  disabled={resetLoading}
-                  className="inline-flex items-center justify-center gap-2 py-3 px-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-xs transition-all shadow-sm active:scale-[0.98] cursor-pointer"
-                >
-                  <Key size={14} />
-                  {resetLoading ? "Dispatching link…" : "Send Password Reset Email"}
-                </button>
-              )}
-            </div>
-
-            {/* Danger Zone */}
-            <div className="glass-panel rounded-3xl p-6 sm:p-8 shadow-sm border border-red-500/20 bg-red-500/[0.02] mt-6">
-              <h3 className="text-lg font-bold text-red-500 mb-2 flex items-center gap-2">
-                <Trash2 size={18} className="text-red-500" />
-                Danger Zone: Delete Account
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
-                Permanently delete your profile, address records, and dispatch histories. Ratings and reviews will be preserved. **This action cannot be undone.**
-              </p>
-
-              <div className="space-y-4">
-                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl text-xs flex items-center gap-2 leading-relaxed">
-                  <span className="font-bold">Verification required:</span>
-                  <span>Type <code className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-[11px] font-black select-all text-white">{appUser?.role}@{appUser?.name}</code> to confirm deletion.</span>
+                  {!showAddAddress && (
+                    <button
+                      onClick={() => setShowAddAddress(true)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer shrink-0"
+                    >
+                      <Plus size={14} /> Add New
+                    </button>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-end">
-                  <div className="w-full">
-                    <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1.5 ml-0.5">Confirmation text</label>
-                    <input
-                      type="text"
-                      placeholder={`${appUser?.role}@${appUser?.name}`}
-                      value={deleteConfirmation}
-                      onChange={(e) => setDeleteConfirmation(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/60 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-transparent outline-none transition-all text-sm font-semibold"
-                    />
+                {addressError && (
+                  <div className="mb-4 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-lg px-3 py-2 flex items-center gap-2">
+                    <ShieldAlert size={14} className="shrink-0" /><span>{addressError}</span>
                   </div>
+                )}
+                {addressSuccess && (
+                  <div className="mb-4 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 rounded-lg px-3 py-2 flex items-center gap-2">
+                    <CheckCircle size={14} className="shrink-0" /><span>{addressSuccess}</span>
+                  </div>
+                )}
 
-                  <button
-                    type="button"
-                    onClick={handleDeleteAccount}
-                    disabled={deleteLoading || deleteConfirmation !== `${appUser?.role}@${appUser?.name}`}
-                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-600 text-white font-bold text-xs transition-all shadow-md hover:shadow-red-500/10 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2"
-                  >
-                    {deleteLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Deleting Account permanently…
-                      </>
+                {showAddAddress ? (
+                  <form onSubmit={handleAddAddress} className="space-y-4 border border-slate-200 dark:border-slate-800 rounded-xl p-5 bg-slate-50/60 dark:bg-slate-800/30">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><MapPin size={12} className="text-orange-500" /> New Address</h4>
+                    <div>
+                      <label className={LABEL}>Street Address / Door No.</label>
+                      <input type="text" required placeholder="e.g. Flat 302, Green Apartments" value={newAddress.address} onChange={(e) => setNewAddress(prev => ({ ...prev, address: e.target.value }))} className={INPUT} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={LABEL}>Area / Locality</label>
+                        <input type="text" required placeholder="e.g. Sector 12" value={newAddress.area} onChange={(e) => setNewAddress(prev => ({ ...prev, area: e.target.value }))} className={INPUT} />
+                      </div>
+                      <div>
+                        <label className={LABEL}>City</label>
+                        <input type="text" required placeholder="e.g. Dwarka" value={newAddress.city} onChange={(e) => setNewAddress(prev => ({ ...prev, city: e.target.value }))} className={INPUT} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className={`${LABEL} flex items-center gap-1.5`}>Pin Code {pincodeLoading && <Loader2 size={10} className="animate-spin text-orange-500" />}</label>
+                        <input type="text" required placeholder="e.g. 606603" maxLength={6} value={newAddress.pin_code} onChange={(e) => handlePincodeChange(e.target.value)} className={INPUT} />
+                      </div>
+                      <div>
+                        <label className={LABEL}>District</label>
+                        <input type="text" required placeholder="e.g. Tiruvannamalai" value={newAddress.district} onChange={(e) => setNewAddress(prev => ({ ...prev, district: e.target.value }))} className={INPUT} />
+                      </div>
+                      <div>
+                        <label className={LABEL}>State</label>
+                        <select required value={newAddress.state} onChange={(e) => setNewAddress(prev => ({ ...prev, state: e.target.value }))} className={`${INPUT} appearance-none cursor-pointer`}>
+                          <option value="" disabled>Select State</option>
+                          {INDIAN_STATES.map((st) => (<option key={st} value={st}>{st}</option>))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2.5 pt-1">
+                      <button type="button" onClick={() => setShowAddAddress(false)} className="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer">Cancel</button>
+                      <button type="submit" disabled={addressLoading} className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold text-xs shadow-sm transition-all cursor-pointer flex items-center gap-1.5">
+                        {addressLoading && <Loader2 size={12} className="animate-spin" />} Save Address
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="space-y-3">
+                    {addressLoading && addresses.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                        <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+                        <p className="text-xs mt-2">Loading your addresses…</p>
+                      </div>
+                    ) : addresses.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                        <MapPin size={24} className="mb-2 text-slate-300 dark:text-slate-700" />
+                        <p className="text-xs font-bold">No saved addresses</p>
+                        <p className="text-[10px] text-slate-400 mt-1 max-w-[220px] text-center">Add one to select it quickly during service requests.</p>
+                      </div>
                     ) : (
-                      <>
-                        <Trash2 size={14} />
-                        Delete Account permanently
-                      </>
+                      <div className="grid grid-cols-1 gap-3">
+                        {addresses.map((addr) => (
+                          <div key={addr._id} className="group relative flex items-start justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/30 hover:border-orange-300 dark:hover:border-orange-500/30 transition-all">
+                            <div className="flex gap-3.5">
+                              <div className="mt-0.5 p-2.5 rounded-lg bg-orange-50 dark:bg-orange-500/10 text-orange-500 shrink-0">
+                                <MapPin size={16} />
+                              </div>
+                              <div className="pr-10">
+                                <p className="text-sm font-bold text-slate-800 dark:text-slate-100 capitalize">{addr.address}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 capitalize">{addr.area}, {addr.city}</p>
+                                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-wide">{addr.district}, {addr.state} - <strong className="text-orange-600 dark:text-orange-400 font-mono">{addr.pin_code}</strong></p>
+                              </div>
+                            </div>
+                            <button onClick={() => handleDeleteAddress(addr._id)} className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all opacity-0 group-hover:opacity-100 cursor-pointer" title="Delete Address">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </button>
-                </div>
-
-                {deleteError && (
-                  <p className="text-xs text-red-500 font-bold mt-2 animate-pulse">{deleteError}</p>
+                  </div>
                 )}
               </div>
-            </div>
+            )}
+
+            {/* ───────────────────────── SECURITY ───────────────────────── */}
+            {activeSection === "security" && (
+              <div className={`${CARD} p-6 sm:p-8`}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <Key size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white">Security &amp; Passwords</h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Manage your login credentials.</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-500 dark:text-slate-400 my-5 leading-relaxed">
+                  Request a password reset email to change your login credentials via a secure Firebase link.
+                </p>
+
+                {resetSuccess ? (
+                  <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-400 rounded-xl p-4 flex items-start gap-3">
+                    <CheckCircle size={18} className="shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-sm">Reset email sent!</h4>
+                      <p className="text-xs mt-1 leading-relaxed">We've sent a password reset link to <strong>{form.email}</strong>. Check your inbox and spam folder.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handlePasswordReset}
+                    disabled={resetLoading}
+                    className="inline-flex items-center justify-center gap-2 py-2.5 px-5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+                  >
+                    {resetLoading ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+                    {resetLoading ? "Dispatching link…" : "Send Password Reset Email"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ───────────────────────── DANGER ZONE ───────────────────────── */}
+            {activeSection === "danger" && (
+              <div className={`${CARD} p-6 sm:p-8 border-red-200 dark:border-red-900/50`}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400">
+                    <AlertTriangle size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-red-600 dark:text-red-400">Delete Account</h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Permanently remove your account and data.</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-500 dark:text-slate-400 my-5 leading-relaxed">
+                  This permanently deletes your profile, address records, and dispatch history. Ratings and reviews are preserved. <strong className="text-red-500">This action cannot be undone.</strong>
+                </p>
+
+                <div className="space-y-4">
+                  <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 rounded-lg text-xs flex flex-wrap items-center gap-1.5">
+                    <span className="font-bold">Type</span>
+                    <code className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/50 text-[11px] font-black select-all">{appUser?.role}@{appUser?.name}</code>
+                    <span className="font-bold">to confirm.</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">Confirmation text</label>
+                      <input
+                        type="text"
+                        placeholder={`${appUser?.role}@${appUser?.name}`}
+                        value={deleteConfirmation}
+                        onChange={(e) => setDeleteConfirmation(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 px-3.5 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500 transition-all"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDeleteAccount}
+                      disabled={deleteLoading || deleteConfirmation !== `${appUser?.role}@${appUser?.name}`}
+                      className="w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 text-white font-bold text-xs transition-all shadow-sm disabled:cursor-not-allowed active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2"
+                    >
+                      {deleteLoading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Deleting…</>) : (<><Trash2 size={14} /> Delete Account Permanently</>)}
+                    </button>
+                  </div>
+
+                  {deleteError && <p className="text-xs text-red-500 font-bold animate-pulse">{deleteError}</p>}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
 
       {/* Critical Edit Modal Popup */}
       {editingField && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
-          <div className="glass-panel rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative overflow-hidden animate-scale-up border border-slate-700/40 bg-slate-900/90">
-            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-              <ShieldAlert className="text-orange-500" size={20} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-700 animate-scale-up">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+              <ShieldAlert className="text-indigo-500" size={18} />
               Update {editingField === "email" ? "Email Address" : "Phone Number"}
             </h3>
-            
-            <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Changing your registered {editingField === "email" ? "email" : "phone number"} is a critical action. 
-              Doing so will reset its verification status, and you will need to verify the new credentials.
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+              Changing your registered {editingField === "email" ? "email" : "phone number"} resets its verification status. You'll need to verify the new credentials.
             </p>
-
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  New {editingField === "email" ? "Email Address" : "Phone Number"}
-                </label>
-                <input
-                  type={editingField === "email" ? "email" : "text"}
-                  value={editValue}
-                  onChange={(e) => setEditValue(
-                    editingField === "phone" 
-                      ? e.target.value.replace(/\D/g, "").slice(0, 10) 
-                      : e.target.value
-                  )}
-                  placeholder={editingField === "email" ? "name@example.com" : "10-digit number"}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-white placeholder-slate-500 focus:ring-2 focus:ring-orange-500 outline-none transition-all text-sm font-medium"
-                />
-              </div>
-
-              {editError && (
-                <div className="text-xs text-rose-500 bg-rose-500/10 border border-rose-500/20 px-3.5 py-2.5 rounded-xl font-medium">
-                  {editError}
-                </div>
-              )}
+            <div className="mb-5">
+              <label className={LABEL}>New {editingField === "email" ? "Email Address" : "Phone Number"}</label>
+              <input
+                type={editingField === "email" ? "email" : "text"}
+                value={editValue}
+                onChange={(e) => setEditValue(editingField === "phone" ? e.target.value.replace(/\D/g, "").slice(0, 10) : e.target.value)}
+                placeholder={editingField === "email" ? "name@example.com" : "10-digit number"}
+                className={INPUT}
+                autoFocus
+              />
+              {editError && <div className="mt-2 text-xs text-rose-500 bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-lg font-medium">{editError}</div>}
             </div>
-
             <div className="flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setEditingField(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer select-none"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmEdit}
-                className="px-5 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer select-none active:scale-95 transition-all"
-              >
-                Confirm Change
-              </button>
+              <button type="button" onClick={() => setEditingField(null)} className="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">Cancel</button>
+              <button type="button" onClick={handleConfirmEdit} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer active:scale-95 transition-all">Confirm Change</button>
             </div>
           </div>
         </div>

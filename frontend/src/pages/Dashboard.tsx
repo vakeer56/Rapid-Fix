@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { io } from "socket.io-client";
-import { Navigate } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Problem from "../components/Problem";
+import WorkerBadge from "../components/WorkerBadge";
 import { useAuth } from "../context/AuthContext";
 import { usePopup } from "../context/PopupContext";
 import api from "../service/api";
@@ -25,8 +26,26 @@ import {
   Check,
   Loader2,
   Truck,
-  X
+  X,
+  FileText,
+  UploadCloud,
+  Crown
 } from "lucide-react";
+
+interface AssignedWorker {
+  _id: string;
+  name: string;
+  experience: number;
+  phone: string;
+  photo?: string;
+  rating?: {
+    totalSum: number;
+    totalCount: number;
+  };
+  badge?: { tier: string; label: string };
+  complaintsCount?: number;
+  isPhoneVerified?: boolean;
+}
 
 interface ProblemRequest {
   _id: string;
@@ -35,6 +54,7 @@ interface ProblemRequest {
   urgency: boolean;
   status: "unresolved" | "pending" | "on the way" | "in progress" | "resolved";
   createdAt: string;
+  updatedAt: string;
   picture?: string;
   pictures?: string[];
   video?: string;
@@ -42,34 +62,15 @@ interface ProblemRequest {
   category?: string;
   address?: {
     address: string;
+    addressLine?: string;
     area: string;
     city: string;
     district: string;
     state: string;
     pin_code: number;
   };
-  assigned_worker?: {
-    _id: string;
-    name: string;
-    experience: number;
-    phone: string;
-    photo?: string;
-    rating?: {
-      totalSum: number;
-      totalCount: number;
-    };
-  };
-  resolved_worker?: {
-    _id: string;
-    name: string;
-    experience: number;
-    phone: string;
-    photo?: string;
-    rating?: {
-      totalSum: number;
-      totalCount: number;
-    };
-  };
+  assigned_worker?: AssignedWorker;
+  resolved_worker?: AssignedWorker;
   userId?: {
     _id: string;
     name: string;
@@ -129,6 +130,19 @@ export default function Dashboard() {
   const [workerReviewsList, setWorkerReviewsList] = useState<any[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
 
+  // Worker government-document verification states
+  const [verification, setVerification] = useState<{
+    governmentVerification?: {
+      status: "none" | "pending" | "approved" | "rejected";
+      documentType?: string;
+      documentNumber?: string;
+      documentImages?: string[];
+      rejectionReason?: string;
+    };
+    badge?: { tier: string; label: string };
+    completedJobs?: number;
+  } | null>(null);
+
   const fetchRatedWorkers = async () => {
     if (!appUser || appUser.role === "worker") return;
     try {
@@ -156,7 +170,8 @@ export default function Dashboard() {
               ...prev,
               rating: res.data.rating,
               experience: res.data.experience ?? prev.experience,
-              complaintsCount: res.data.complaintsCount ?? prev.complaintsCount
+              complaintsCount: res.data.complaintsCount ?? prev.complaintsCount,
+              badge: res.data.badge ?? prev.badge
             };
           });
         }
@@ -165,6 +180,22 @@ export default function Dashboard() {
       console.warn("Worker reviews fetch failed:", err);
     } finally {
       setReviewsLoading(false);
+    }
+  };
+
+  const fetchVerification = async () => {
+    if (!appUser || appUser.role !== "worker") return;
+    try {
+      const res = await api.get("/verification/me");
+      if (res.data && res.data.success) {
+        setVerification({
+          governmentVerification: res.data.governmentVerification,
+          badge: res.data.badge,
+          completedJobs: res.data.completedJobs
+        });
+      }
+    } catch (err) {
+      console.warn("Verification status fetch failed/skipped:", err);
     }
   };
 
@@ -205,6 +236,7 @@ export default function Dashboard() {
         fetchActiveAssignments();
         fetchWorkerComplaints();
         fetchOwnReviews();
+        fetchVerification();
       } else {
         fetchRequests();
         fetchRatedWorkers();
@@ -624,18 +656,15 @@ export default function Dashboard() {
 
                 <div className="flex items-center gap-1.5 justify-center mb-1">
                   <h2 className="text-xl font-bold text-white tracking-tight">{appUser.name}</h2>
-                  {appUser.verificationStatus && (
-                    <ShieldCheck className="text-orange-500" size={18} />
-                  )}
+                  {(verification?.badge?.tier || appUser.badge?.tier) &&
+                    (verification?.badge?.tier || appUser.badge?.tier) !== "pending" && (
+                      <ShieldCheck className="text-orange-500" size={18} />
+                    )}
                 </div>
 
-                <span className={`text-[10px] uppercase tracking-widest font-extrabold px-3 py-1 rounded-full border mb-4 ${
-                  appUser.verificationStatus 
-                    ? "bg-orange-500/10 border-orange-500/30 text-orange-400" 
-                    : "bg-slate-800 border-slate-700 text-slate-400"
-                }`}>
-                  {appUser.verificationStatus ? "Verified Service Partner" : "Pending Verification"}
-                </span>
+                <div className="mb-4">
+                  <WorkerBadge badge={verification?.badge || appUser.badge} />
+                </div>
 
                 {/* Rating display */}
                 <div className="mb-6 bg-slate-950/40 rounded-2xl px-4 py-2 border border-slate-850">
@@ -683,6 +712,99 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Verification / Trust Tier Card */}
+            {(() => {
+              const tier = verification?.badge?.tier || appUser.badge?.tier || "pending";
+              const gov = verification?.governmentVerification;
+              const govStatus = gov?.status || "none";
+              const emailPhoneVerified = tier !== "pending";
+              const completed = (verification as any)?.completedJobs ?? (appUser as any).completedJobs ?? 0;
+
+              return (
+                <div className="glass-panel rounded-3xl p-6 sm:p-7 shadow-2xl relative overflow-hidden">
+                  <div className="absolute -left-16 -bottom-16 w-36 h-36 bg-blue-600/10 rounded-full blur-2xl pointer-events-none" />
+
+                  <h3 className="text-sm font-extrabold text-white flex items-center gap-2 mb-1">
+                    <ShieldCheck size={16} className="text-orange-500" />
+                    Trust & Verification
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mb-4 leading-relaxed">
+                    Climb the trust ladder to win more clients. Each tier unlocks a stronger badge on your profile.
+                  </p>
+
+                  {/* Email + phone gate */}
+                  {!emailPhoneVerified && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-[11px] text-amber-300 leading-relaxed">
+                      Verify both your <strong>email</strong> and <strong>phone number</strong> in your Profile to earn the
+                      <strong> Verified</strong> badge and unlock government verification.
+                    </div>
+                  )}
+
+                  {/* Government verification states */}
+                  {emailPhoneVerified && govStatus === "approved" && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 text-[11px] text-emerald-300 leading-relaxed flex items-start gap-2">
+                      <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
+                      <span>
+                        Your government documents are <strong>approved</strong>. You're a <strong>Verified Pro</strong>.
+                        Keep your rating high and complete more jobs to reach Trusted Pro &amp; Elite.
+                      </span>
+                    </div>
+                  )}
+
+                  {emailPhoneVerified && govStatus === "pending" && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-[11px] text-amber-300 leading-relaxed flex items-start gap-2">
+                      <Clock size={15} className="mt-0.5 shrink-0" />
+                      <span>Your documents are <strong>under review</strong>. We'll update your badge once an admin approves them.</span>
+                    </div>
+                  )}
+
+                  {emailPhoneVerified && (govStatus === "none" || govStatus === "rejected") && (
+                    <div className="space-y-3">
+                      {govStatus === "rejected" && (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-3 text-[11px] text-red-300 leading-relaxed flex items-start gap-2">
+                          <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+                          <span>
+                            Previous submission rejected{gov?.rejectionReason ? `: ${gov.rejectionReason}` : "."} Please resubmit from your profile.
+                          </span>
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-slate-400 leading-relaxed flex items-start gap-1.5">
+                        <FileText size={13} className="text-orange-500 mt-0.5 shrink-0" />
+                        Submit a government document to earn the <span className="text-blue-400 font-bold">Verified Pro</span> badge.
+                      </p>
+
+                      <Link
+                        to="/profile"
+                        className="w-full py-2.5 rounded-xl font-bold text-white text-xs bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer no-underline"
+                      >
+                        <UploadCloud size={14} />
+                        {govStatus === "rejected" ? "Resubmit in Profile" : "Request Verification in Profile"}
+                      </Link>
+                    </div>
+                  )}
+
+                  {/* Progress to higher tiers */}
+                  {emailPhoneVerified && govStatus === "approved" && (
+                    <div className="mt-4 pt-4 border-t border-slate-800/60 space-y-2 text-[11px] text-slate-400">
+                      <div className="flex items-center justify-between">
+                        <span>Completed jobs</span>
+                        <span className="font-bold text-slate-200">{completed}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1"><Crown size={12} className="text-amber-400" /> Trusted Pro</span>
+                        <span className="text-slate-500">4.5★ &amp; 35 jobs</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1"><Star size={12} className="text-amber-300" /> Trusted Elite</span>
+                        <span className="text-slate-500">4.8★, 100 jobs, 6 mo, 0 complaints</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Right Panel: Tabs, Feeds and Task Center */}
@@ -1645,6 +1767,11 @@ export default function Dashboard() {
                                     {req.status === "resolved" ? "Serviced by Expert" : "Technician Assigned"}
                                   </p>
                                   <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">{activeWorker.name}</p>
+                                  {activeWorker.badge && (
+                                    <div className="mt-0.5">
+                                      <WorkerBadge badge={activeWorker.badge} size="sm" />
+                                    </div>
+                                  )}
                                   <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">{activeWorker.experience || 0} Years In-field Experience</p>
                                   <div className="flex flex-col gap-0.5 mt-1">
                                     {renderStars(activeWorker.rating?.totalSum, activeWorker.rating?.totalCount)}
@@ -2015,6 +2142,11 @@ export default function Dashboard() {
               <div>
                 <h3 className="text-base font-extrabold text-white">Rating & Review History</h3>
                 <p className="text-[11px] text-slate-400 mt-1">Specialist: <span className="text-orange-400 font-bold">{viewingWorkerReviews.name}</span></p>
+                {viewingWorkerReviews.badge && (
+                  <div className="mt-1.5">
+                    <WorkerBadge badge={viewingWorkerReviews.badge} size="sm" />
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => setViewingWorkerReviews(null)}

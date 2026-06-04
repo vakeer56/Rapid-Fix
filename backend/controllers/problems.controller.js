@@ -87,14 +87,18 @@ exports.resolveProblem = async (req, res) => {
             });
         }
 
-        //Remove problem id from accepted problems in worker
+        //Remove problem id from accepted problems in worker and count the resolved job
+        //towards the worker's trust-badge progress (same worker, single atomic update)
         if(problem.assigned_worker) {
-            
+
             await Worker.findByIdAndUpdate(
                 problem.assigned_worker,
                 {
                     $pull: {
                         accepted_problems: problemId
+                    },
+                    $inc: {
+                        completedJobs: 1
                     }
                 }
             )
@@ -103,6 +107,7 @@ exports.resolveProblem = async (req, res) => {
         problem.resolved_worker = problem.assigned_worker;
         problem.assigned_worker = null;
         problem.status = "resolved";
+
         if (amountReceived !== undefined) {
             problem.amountReceived = Number(amountReceived) || 0;
         }

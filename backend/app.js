@@ -15,6 +15,7 @@ const problemRoutes = require('../backend/routes/problem.Route.js');
 const communityRoutes = require('./routes/community.routes');
 const aiRoutes = require('./routes/ai.routes');
 const complaintsRouter = require('./routes/complaint.route');
+const verificationRoutes = require('./routes/verification.routes');
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -22,6 +23,7 @@ app.use('/address', addressRouter);
 app.use('/getProblems', getProblemsRouter);
 app.use('/reviews', reviewsRouter);
 app.use('/complaints', complaintsRouter);
+app.use('/verification', verificationRoutes);
 
 
 connectDB();

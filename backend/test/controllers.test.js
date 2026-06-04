@@ -181,6 +181,9 @@ test("resolveProblem removes the assignment from the worker and marks the proble
       $pull: {
         accepted_problems: "problem-123",
       },
+      $inc: {
+        completedJobs: 1,
+      },
     },
   ]);
   assert.equal(problem.assigned_worker, null);

@@ -29,8 +29,20 @@ export interface AppUser {
   photo?: string;
   verificationStatus?: boolean;
   isPhoneVerified?: boolean;
+  isEmailVerified?: boolean;
   firebaseUid: string;
   categories?: string[];
+  completedJobs?: number;
+  badge?: { tier: string; label: string };
+  governmentVerification?: {
+    status: "none" | "pending" | "approved" | "rejected";
+    documentType?: string;
+    documentNumber?: string;
+    documentImages?: string[];
+    submittedAt?: string;
+    reviewedAt?: string;
+    rejectionReason?: string;
+  };
 }
 
 export interface AuthContextType {
