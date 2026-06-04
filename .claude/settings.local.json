@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(cd /c/Users/Administrator/Downloads/sample/Rapid-Fix/frontend/src && grep -rn \"verificationStatus\\\\|isEmailVerified\\\\|isPhoneVerified\\\\|verified\\\\|Verified\\\\|badge\\\\|Badge\\\\|rating\\\\|accepted_problems\" pages/ components/ types/ | head -60)",
-      "Bash(cd /c/Users/Administrator/Downloads/sample/Rapid-Fix/backend && grep -rn \"resolved\\\\|resolved_worker\\\\|amountReceived\\\\|status =\" controllers/problems.controller.js controllers/getProblems.controller.js routes/problem.Route.js)",
-      "Bash(cd /c/Users/Administrator/Downloads/sample/Rapid-Fix/backend && grep -rn \"cloudinary\\\\|uploadOnCloudinary\\\\|upload\\\\b\\\\|multer\\\\|\\\\.single\\\\|\\\\.array\" routes/ controllers/ config/cloudinary.js | head -40)"
-    ]
-  }
-}
