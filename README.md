@@ -1,4 +1,4 @@
-# 🛠️ RapidFix — On-Demand Real-Time Home Services Matching Platform
+# 🛠️ RapidFix - On-Demand Real-Time Home Services Matching Platform
 
 [![Build & Test Status](https://img.shields.io/badge/Backend%20Tests-35%2F35%20Passing-emerald?style=for-the-badge&logo=mocha)](backend/test)
 [![Frontend Check](https://img.shields.io/badge/Frontend%20Typecheck-Clean-blue?style=for-the-badge&logo=typescript)](frontend)
