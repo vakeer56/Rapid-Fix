@@ -304,6 +304,12 @@ const meController = async (req, res) => {
         }
 
         if (role === "worker") {
+            try {
+                const { syncWorkerRating } = require("./reviews.controller");
+                await syncWorkerRating(sub);
+            } catch (syncErr) {
+                console.warn("[meController] Failed to sync worker rating on load:", syncErr.message);
+            }
             account = await Worker.findById(sub);
         }
 
@@ -917,7 +923,7 @@ const syncAdminConfigController = async (req, res) => {
         const dotenv = require('dotenv');
         const mongoose = require('mongoose');
 
-        const { mongo, firebase, cloudinary, gemini } = req.body;
+        const { mongo, firebase, cloudinary, gemini, email } = req.body;
 
         if (!mongo || !firebase) {
             return res.status(400).json({ success: false, message: 'mongo and firebase parameters are required' });
@@ -949,6 +955,10 @@ CLOUD_API_SECRET=${cloudinary?.apiSecret || ""}
 
 # Gemini AI Configuration
 GEMINI_API_KEY=${gemini?.apiKey || ""}
+
+# Gmail SMTP Configuration
+EMAIL_USER=${email?.user || ""}
+EMAIL_PASS=${email?.pass || ""}
 `;
 
         // Paths to save
@@ -1140,12 +1150,110 @@ const getAdminConfigController = async (req, res) => {
                 },
                 gemini: {
                     apiKey: process.env.GEMINI_API_KEY || "",
+                },
+                email: {
+                    user: process.env.EMAIL_USER || "",
+                    pass: process.env.EMAIL_PASS || "",
                 }
             }
         });
     } catch (error) {
         console.error('[getAdminConfigController]', error);
         return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
+    }
+};
+
+const sendEmailOtpController = async (req, res) => {
+    try {
+        const { sub, role } = req.user;
+        
+        let account;
+        if (role === "worker") {
+            account = await Worker.findById(sub);
+        } else {
+            account = await User.findById(sub);
+        }
+
+        if (!account) {
+            return res.status(404).json({ success: false, message: "Account not found" });
+        }
+
+        if (!account.email) {
+            return res.status(400).json({ success: false, message: "No email address configured on your profile." });
+        }
+
+        // Generate 6-digit random code
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // Expiration: 10 minutes
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+        account.emailVerificationCode = otp;
+        account.emailVerificationExpires = expiresAt;
+        await account.save();
+
+        const { sendEmailOtp } = require("../services/nodemailer.service");
+        await sendEmailOtp(account.email, otp);
+
+        return res.json({
+            success: true,
+            message: `Verification code successfully sent to ${account.email}`
+        });
+    } catch (error) {
+        console.error("[sendEmailOtpController] Error:", error);
+        return res.status(500).json({ success: false, message: "Failed to send email verification: " + error.message });
+    }
+};
+
+const verifyEmailOtpController = async (req, res) => {
+    try {
+        const { sub, role } = req.user;
+        const { code } = req.body;
+
+        if (!code || code.length !== 6) {
+            return res.status(400).json({ success: false, message: "Valid 6-digit verification code is required." });
+        }
+
+        let account;
+        if (role === "worker") {
+            account = await Worker.findById(sub);
+        } else {
+            account = await User.findById(sub);
+        }
+
+        if (!account) {
+            return res.status(404).json({ success: false, message: "Account not found" });
+        }
+
+        if (!account.emailVerificationCode || !account.emailVerificationExpires) {
+            return res.status(400).json({ success: false, message: "No verification request pending. Please send a new code." });
+        }
+
+        if (new Date() > account.emailVerificationExpires) {
+            return res.status(400).json({ success: false, message: "Verification code has expired. Please request a new one." });
+        }
+
+        if (account.emailVerificationCode !== code) {
+            return res.status(400).json({ success: false, message: "Invalid verification code. Please check and try again." });
+        }
+
+        // Mark verified and clear verification fields
+        account.isEmailVerified = true;
+        account.emailVerificationCode = null;
+        account.emailVerificationExpires = null;
+        await account.save();
+
+        return res.json({
+            success: true,
+            message: "Email address verified successfully",
+            user: {
+                ...account.toObject(),
+                role
+            }
+        });
+    } catch (error) {
+        console.error("[verifyEmailOtpController] Error:", error);
+        return res.status(500).json({ success: false, message: "Verification failed: " + error.message });
     }
 };
 
@@ -1162,4 +1270,6 @@ module.exports = {
     getAdminConfigController,
     deleteAccountController,
     verifyWorkerPhoneController,
+    sendEmailOtpController,
+    verifyEmailOtpController,
 };

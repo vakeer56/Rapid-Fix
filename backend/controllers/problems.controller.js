@@ -1,7 +1,9 @@
 const Problem = require('../model/problem.model');
 const Worker = require('../model/workers.model.js');
+const User = require('../model/user.model.js');
 const cloudinary = require('../config/cloudinary.js');
 const { worker } = require('cluster');
+const nodemailerService = require('../services/nodemailer.service');
 
 exports.createProblem = async (req, res) => {
 
@@ -104,6 +106,8 @@ exports.resolveProblem = async (req, res) => {
             )
         }
 
+        const workerId = problem.assigned_worker;
+
         problem.resolved_worker = problem.assigned_worker;
         problem.assigned_worker = null;
         problem.status = "resolved";
@@ -113,6 +117,19 @@ exports.resolveProblem = async (req, res) => {
         }
 
         await problem.save();
+
+        // Notify customer of completion and payment summary
+        if (workerId) {
+            try {
+                const customer = await User.findById(problem.userId);
+                const workerObj = await Worker.findById(workerId);
+                if (customer && customer.email && workerObj) {
+                    await nodemailerService.sendProblemResolvedEmail(customer.email, customer.name, workerObj.name, problem.name, problem.amountReceived);
+                }
+            } catch (emailErr) {
+                console.error("[resolveProblem] Email notification error:", emailErr);
+            }
+        }
 
         // Emit Socket event to notify customer that the request is resolved
         const io = req.app?.get('socketio');
@@ -189,6 +206,17 @@ exports.startProblemProgress = async (req, res) => {
         }
         problem.status = "in progress";
         await problem.save();
+
+        // Notify customer of arrival
+        try {
+            const customer = await User.findById(problem.userId);
+            const workerObj = await Worker.findById(problem.assigned_worker);
+            if (customer && customer.email && workerObj) {
+                await nodemailerService.sendWorkerReachedEmail(customer.email, customer.name, workerObj.name, problem.name);
+            }
+        } catch (emailErr) {
+            console.error("[startProblemProgress] Email notification error:", emailErr);
+        }
 
         const io = req.app?.get('socketio');
         if (io) {

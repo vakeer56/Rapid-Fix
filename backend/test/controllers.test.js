@@ -3,8 +3,15 @@ const assert = require("node:assert/strict");
 
 const Problem = require("../model/problem.model.js");
 const Worker = require("../model/workers.model.js");
+const User = require("../model/user.model.js");
 const cloudinary = require("../config/cloudinary.js");
 const fs = require("node:fs");
+const nodemailerService = require("../services/nodemailer.service.js");
+
+// Mock nodemailer service globally for controllers tests
+nodemailerService.sendWorkerAcceptedEmail = async () => {};
+nodemailerService.sendWorkerReachedEmail = async () => {};
+nodemailerService.sendProblemResolvedEmail = async () => {};
 
 const {
   createProblem,
@@ -20,6 +27,8 @@ const originalProblemSave = Problem.prototype.save;
 const originalProblemFindById = Problem.findById;
 const originalProblemFindOneAndUpdate = Problem.findOneAndUpdate;
 const originalWorkerFindByIdAndUpdate = Worker.findByIdAndUpdate;
+const originalWorkerFindById = Worker.findById;
+const originalUserFindById = User.findById;
 const originalCloudinaryUpload = cloudinary.uploader.upload;
 const originalUnlinkSync = fs.unlinkSync;
 
@@ -38,11 +47,18 @@ function createRes() {
   };
 }
 
+test.beforeEach(() => {
+  User.findById = async () => ({ _id: "user-1", name: "Mock User", email: "mock@user.com" });
+  Worker.findById = async () => ({ _id: "worker-1", name: "Mock Worker", email: "mock@worker.com" });
+});
+
 test.afterEach(() => {
   Problem.prototype.save = originalProblemSave;
   Problem.findById = originalProblemFindById;
   Problem.findOneAndUpdate = originalProblemFindOneAndUpdate;
   Worker.findByIdAndUpdate = originalWorkerFindByIdAndUpdate;
+  Worker.findById = originalWorkerFindById;
+  User.findById = originalUserFindById;
   cloudinary.uploader.upload = originalCloudinaryUpload;
   fs.unlinkSync = originalUnlinkSync;
 });

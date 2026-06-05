@@ -240,6 +240,12 @@ export default function Profile() {
   const [phoneError, setPhoneError] = useState("");
   const [phoneSuccess, setPhoneSuccess] = useState("");
 
+  // Email Verification States
+  const [emailVerificationStep, setEmailVerificationStep] = useState<"idle" | "sending" | "otp_sent" | "verifying">("idle");
+  const [emailVerificationCode, setEmailVerificationCode] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [emailSuccess, setEmailSuccess] = useState("");
+
   // Critical Edit Modal States
   const [editingField, setEditingField] = useState<"phone" | "email" | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -355,6 +361,56 @@ export default function Profile() {
       console.error("Error verifying OTP:", err);
       setPhoneError(err.message || "Invalid OTP code. Please try again.");
       setVerificationStep("otp_sent");
+    }
+  };
+
+  const handleSendEmailOTP = async () => {
+    setEmailError("");
+    setEmailSuccess("");
+    if (!form.email) {
+      setEmailError("Please enter a valid email address first.");
+      return;
+    }
+    setEmailVerificationStep("sending");
+    try {
+      const res = await api.post("/auth/email-otp/send");
+      if (res.data && res.data.success) {
+        setEmailSuccess(res.data.message || `Verification code sent to ${form.email}!`);
+        setEmailVerificationStep("otp_sent");
+      } else {
+        throw new Error(res.data.message || "Failed to send email verification code.");
+      }
+    } catch (err: any) {
+      console.error("Error sending email OTP:", err);
+      setEmailError(err.response?.data?.message || err.message || "Failed to send email verification.");
+      setEmailVerificationStep("idle");
+    }
+  };
+
+  const handleVerifyEmailOTP = async () => {
+    setEmailError("");
+    setEmailSuccess("");
+    if (!/^\d{6}$/.test(emailVerificationCode)) {
+      setEmailError("Please enter a valid 6-digit OTP.");
+      return;
+    }
+    setEmailVerificationStep("verifying");
+    try {
+      const res = await api.post("/auth/email-otp/verify", { code: emailVerificationCode });
+      if (res.data && res.data.success) {
+        setEmailSuccess("Email verified successfully!");
+        setEmailVerificationStep("idle");
+        setEmailVerificationCode("");
+        if (appToken && res.data.user) {
+          onAuthSuccess(appToken, res.data.user);
+        }
+      } else {
+        throw new Error(res.data.message || "Failed to verify email OTP.");
+      }
+    } catch (err: any) {
+      console.error("Error verifying email OTP:", err);
+      setEmailError(err.response?.data?.message || err.message || "Invalid OTP code. Please try again.");
+      setEmailVerificationStep("otp_sent");
     }
   };
 
@@ -911,19 +967,62 @@ export default function Profile() {
 
                     {/* Email */}
                     <div>
-                      <div className="flex items-center gap-2 mb-1.5">
+                      <div className="flex items-center gap-2 mb-1.5 ml-0.5 whitespace-nowrap">
                         <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Email Address</label>
                         {verifyPill(form.email === appUser?.email && !!appUser?.isEmailVerified)}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <div className="relative flex-grow">
                           <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input type="email" value={form.email} readOnly className={`${INPUT_ICON} bg-slate-50 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 select-none`} required />
                         </div>
-                        <button type="button" onClick={() => openEditModal("email")} className="shrink-0 px-3.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all cursor-pointer">
-                          Edit
-                        </button>
+                        <div className="flex gap-2 shrink-0">
+                          <button type="button" onClick={() => openEditModal("email")} className="px-3.5 py-2.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all cursor-pointer">
+                            Edit
+                          </button>
+                          {(form.email !== appUser?.email || !appUser?.isEmailVerified) && (
+                            <button
+                              type="button"
+                              onClick={handleSendEmailOTP}
+                              disabled={emailVerificationStep !== "idle" || !form.email}
+                              className="px-4 py-2.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                            >
+                              {emailVerificationStep === "sending" ? (<><Loader2 size={12} className="animate-spin" /> Sending…</>) : "Verify Email"}
+                            </button>
+                          )}
+                        </div>
                       </div>
+
+                      {emailError && (
+                        <p className="text-xs text-rose-500 mt-2 font-medium bg-rose-500/10 px-3 py-2 rounded-lg border border-rose-500/20">{emailError}</p>
+                      )}
+                      {emailSuccess && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20">{emailSuccess}</p>
+                      )}
+
+                      {(emailVerificationStep === "otp_sent" || emailVerificationStep === "verifying") && (
+                        <div className="mt-3 p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl animate-fade-in">
+                          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Enter 6-Digit Email Code</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              maxLength={6}
+                              placeholder="000000"
+                              value={emailVerificationCode}
+                              onChange={(e) => setEmailVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                              className="flex-grow text-center tracking-[0.4em] font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleVerifyEmailOTP}
+                              disabled={emailVerificationStep === "verifying" || emailVerificationCode.length !== 6}
+                              className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white transition-all active:scale-95 flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                            >
+                              {emailVerificationStep === "verifying" ? <Loader2 size={12} className="animate-spin" /> : "Verify Code"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

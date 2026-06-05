@@ -1,5 +1,7 @@
 const workers = require("../model/workers.model.js");
 const Problem = require("../model/problem.model.js");
+const User = require("../model/user.model.js");
+const nodemailerService = require("../services/nodemailer.service");
 
 const workerAcceptProblem = async (req, res) => {
     try {
@@ -37,6 +39,17 @@ const workerAcceptProblem = async (req, res) => {
         const io = req.app?.get('socketio');
         if (io) {
             io.emit('problemUpdated', { problemId });
+        }
+
+        // Notify customer that worker is on the way
+        try {
+            const customer = await User.findById(problem.userId);
+            const worker = await workers.findById(workerId);
+            if (customer && customer.email && worker) {
+                await nodemailerService.sendWorkerAcceptedEmail(customer.email, customer.name, worker.name, problem.name);
+            }
+        } catch (emailErr) {
+            console.error("[workerAcceptProblem] Email notification error:", emailErr);
         }
 
         return res.status(200).json({

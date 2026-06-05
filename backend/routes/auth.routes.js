@@ -13,6 +13,8 @@ const {
     getAdminConfigController,
     deleteAccountController,
     verifyWorkerPhoneController,
+    sendEmailOtpController,
+    verifyEmailOtpController,
 } = require("../controllers/auth.controller");
 
 
@@ -57,6 +59,10 @@ router.put('/profile', authMiddleware, updateProfileController);
 
 // Verify worker phone number
 router.put('/verify-phone', authMiddleware, verifyWorkerPhoneController);
+
+// Email OTP Verification
+router.post('/email-otp/send', authMiddleware, sendEmailOtpController);
+router.post('/email-otp/verify', authMiddleware, verifyEmailOtpController);
 
 // Public Firebase config retriever (safe, client-side credentials only)
 router.get('/firebase-config', getFirebaseConfigController);

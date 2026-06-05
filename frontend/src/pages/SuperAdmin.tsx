@@ -20,6 +20,7 @@ import {
   LogOut,
   ChevronRight,
   Lock,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 import api from "../service/api";
@@ -51,6 +52,11 @@ interface GeminiConfig {
   apiKey: string;
 }
 
+interface EmailConfig {
+  user: string;
+  pass: string;
+}
+
 const CARD = "bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm";
 const INPUT = "w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all";
 const LABEL = "block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5";
@@ -65,7 +71,7 @@ export default function SuperAdmin() {
   const [adminError, setAdminError] = useState("");
   const [showAdminPass, setShowAdminPass] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "mongodb" | "firebase" | "cloudinary" | "gemini" | "dotenv">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "mongodb" | "firebase" | "cloudinary" | "gemini" | "email" | "dotenv">("dashboard");
 
   // Initial configurations, will be dynamically populated from backend .env
   const [mongo, setMongo] = useState<MongoConfig>({
@@ -95,6 +101,11 @@ export default function SuperAdmin() {
     apiKey: ""
   });
 
+  const [email, setEmail] = useState<EmailConfig>({
+    user: "",
+    pass: ""
+  });
+
   const [logs, setLogs] = useState<string[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -105,11 +116,12 @@ export default function SuperAdmin() {
       addLog("[SYSTEM] Fetching active environment configurations from backend...");
       const response = await api.get("/auth/admin/config");
       if (response.data && response.data.success && response.data.config) {
-        const { mongo, firebase, cloudinary, gemini } = response.data.config;
+        const { mongo, firebase, cloudinary, gemini, email: emailData } = response.data.config;
         if (mongo) setMongo(mongo);
         if (firebase) setFirebase(firebase);
         if (cloudinary) setCloudinary(cloudinary);
         if (gemini) setGemini(gemini);
+        if (emailData) setEmail(emailData);
         addLog("[SYSTEM] Successfully loaded configurations from backend .env!");
       } else {
         addLog("[SYSTEM] Failed to load configurations from backend.");
@@ -164,17 +176,20 @@ export default function SuperAdmin() {
     targetMongo: MongoConfig,
     targetFirebase: FirebaseConfig,
     targetCloudinary?: CloudinaryConfig,
-    targetGemini?: GeminiConfig
+    targetGemini?: GeminiConfig,
+    targetEmail?: EmailConfig
   ) => {
     const activeCloudinary = targetCloudinary || cloudinary;
     const activeGemini = targetGemini || gemini;
+    const activeEmail = targetEmail || email;
     addLog("[SYSTEM] Initiating server-side .env sync operation...");
     try {
       const response = await api.post("/auth/admin/sync-config", {
         mongo: targetMongo,
         firebase: targetFirebase,
         cloudinary: activeCloudinary,
-        gemini: activeGemini
+        gemini: activeGemini,
+        email: activeEmail
       });
       if (response.data && response.data.success) {
         addLog(`[SYSTEM] Sync successful! Database: ${response.data.dbStatus}`);
@@ -198,25 +213,31 @@ export default function SuperAdmin() {
   const handleSaveMongo = async (e: React.FormEvent) => {
     e.preventDefault();
     addLog(`[MONGO] Dynamic configurations updated: dbName=${mongo.dbName}`);
-    await syncConfigsToServer(mongo, firebase, cloudinary, gemini);
+    await syncConfigsToServer(mongo, firebase, cloudinary, gemini, email);
   };
 
   const handleSaveFirebase = async (e: React.FormEvent) => {
     e.preventDefault();
     addLog(`[FIREBASE] Dynamic credentials updated: apiKey=${(firebase.apiKey || "").substring(0, 8)}...`);
-    await syncConfigsToServer(mongo, firebase, cloudinary, gemini);
+    await syncConfigsToServer(mongo, firebase, cloudinary, gemini, email);
   };
 
   const handleSaveCloudinary = async (e: React.FormEvent) => {
     e.preventDefault();
     addLog(`[CLOUDINARY] Dynamic credentials updated: cloudName=${cloudinary.cloudName}`);
-    await syncConfigsToServer(mongo, firebase, cloudinary, gemini);
+    await syncConfigsToServer(mongo, firebase, cloudinary, gemini, email);
   };
 
   const handleSaveGemini = async (e: React.FormEvent) => {
     e.preventDefault();
     addLog(`[GEMINI] Dynamic credentials updated: apiKey=${(gemini.apiKey || "").substring(0, 8)}...`);
-    await syncConfigsToServer(mongo, firebase, cloudinary, gemini);
+    await syncConfigsToServer(mongo, firebase, cloudinary, gemini, email);
+  };
+
+  const handleSaveEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    addLog(`[EMAIL] Dynamic SMTP credentials updated: user=${email.user}`);
+    await syncConfigsToServer(mongo, firebase, cloudinary, gemini, email);
   };
 
   const triggerSaveSuccess = () => {
@@ -265,6 +286,10 @@ CLOUD_API_SECRET=${cloudinary.apiSecret}
 
 # Gemini AI Configuration
 GEMINI_API_KEY=${gemini.apiKey}
+
+# Gmail SMTP Configuration
+EMAIL_USER=${email.user}
+EMAIL_PASS=${email.pass}
 `;
   };
 
@@ -366,6 +391,7 @@ GEMINI_API_KEY=${gemini.apiKey}
     { id: "firebase", label: "Firebase", icon: Flame },
     { id: "cloudinary", label: "Cloudinary", icon: Cloud },
     { id: "gemini", label: "Gemini AI", icon: Bot },
+    { id: "email", label: "Email (SMTP)", icon: Mail },
     { id: "dotenv", label: ".env Sync", icon: Code },
   ];
 
@@ -623,6 +649,31 @@ GEMINI_API_KEY=${gemini.apiKey}
 
               <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 flex justify-end">
                 <button type="submit" className={BTN_PRIMARY}><Save size={16} /> Save Gemini Key</button>
+              </div>
+            </form>
+          )}
+
+          {/* EMAIL */}
+          {activeTab === "email" && (
+            <form onSubmit={handleSaveEmail} className={`${CARD} p-6 sm:p-8`}>
+              <SectionHead icon={Mail} title="Gmail SMTP Configuration" desc="Configure Gmail SMTP details to dispatch security verification codes (OTPs)." iconWrap="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className={LABEL}>Gmail Address</label>
+                  <input type="email" value={email.user} onChange={(e) => setEmail({ ...email, user: e.target.value })} className={INPUT} placeholder="your-gmail-username@gmail.com" required />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={LABEL}>Gmail App Password</label>
+                  <input type="password" value={email.pass} onChange={(e) => setEmail({ ...email, pass: e.target.value })} className={INPUT} placeholder="••••••••••••••••" required />
+                  <p className="text-[11px] text-slate-500 mt-1.5 leading-normal">
+                    Do not use your main Google account password. Google requires a 16-character <strong>App Password</strong> generated under your account's 2-Step Verification settings.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button type="submit" className={BTN_PRIMARY}><Save size={16} /> Save SMTP Settings</button>
               </div>
             </form>
           )}

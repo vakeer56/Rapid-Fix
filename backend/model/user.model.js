@@ -52,6 +52,14 @@ const userSchema = new Schema({
     isPhoneVerified: {
         type: Boolean,
         default: false
+    },
+    emailVerificationCode: {
+        type: String,
+        default: null
+    },
+    emailVerificationExpires: {
+        type: Date,
+        default: null
     }
 }, { timestamps: true })
 
