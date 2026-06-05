@@ -1045,7 +1045,7 @@ const deleteAccountController = async (req, res) => {
 
         const Address = require("../model/address.model");
         const Problem = require("../model/problem.model");
-        const Worker = require("../model/worker.model");
+        const Worker = require("../model/workers.model");
         const User = require("../model/user.model");
 
         let account = null;
