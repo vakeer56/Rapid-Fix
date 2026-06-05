@@ -4,6 +4,8 @@ const User = require('../model/user.model.js');
 const cloudinary = require('../config/cloudinary.js');
 const { worker } = require('cluster');
 const nodemailerService = require('../services/nodemailer.service');
+const { checkAndApplyAutoAcceptance } = require('./workers.controller.js');
+
 
 exports.createProblem = async (req, res) => {
 
@@ -155,6 +157,8 @@ exports.resolveProblem = async (req, res) => {
 exports.getUserProblems = async (req, res) => {
     try {
         const { sub, role } = req.user;
+        // Check and apply auto-acceptance for expired timers
+        await checkAndApplyAutoAcceptance(req);
         let problems = [];
         if (role === "worker") {
             problems = await Problem.find({

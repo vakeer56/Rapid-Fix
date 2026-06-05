@@ -1,6 +1,7 @@
 const complaintSchema = require('../model/complaint.model');
 const problemModel = require('../model/problem.model');
 const workersModel = require('../model/workers.model');
+const nodemailerService = require("../services/nodemailer.service");
 
 const addComplaint = async (req, res) => {
     try {
@@ -171,6 +172,20 @@ const deleteComplaintAdmin = async (req, res) => {
         // Decrement the worker's cached complaint count (a deleted/false complaint no longer counts)
         if (deleted.worker_id) {
             await workersModel.findByIdAndUpdate(deleted.worker_id, { $inc: { complaintsCount: -1 } });
+            
+            // Notify worker that dispute has been approved and complaint deleted
+            try {
+                const worker = await workersModel.findById(deleted.worker_id);
+                if (worker && worker.email) {
+                    await nodemailerService.sendWorkerDisputeApprovedEmail(
+                        worker.email,
+                        worker.name,
+                        deleted.title
+                    );
+                }
+            } catch (emailErr) {
+                console.error("[deleteComplaintAdmin] Email notification error:", emailErr);
+            }
         }
 
         return res.status(200).json({
@@ -194,6 +209,20 @@ const revokeDisputeAdmin = async (req, res) => {
 
         if (!complaint) {
             return res.status(404).json({ success: false, message: "Complaint not found" });
+        }
+
+        // Notify worker that dispute has been rejected and complaint remains active
+        try {
+            const worker = await workersModel.findById(complaint.worker_id);
+            if (worker && worker.email) {
+                await nodemailerService.sendWorkerDisputeRejectedEmail(
+                    worker.email,
+                    worker.name,
+                    complaint.title
+                );
+            }
+        } catch (emailErr) {
+            console.error("[revokeDisputeAdmin] Email notification error:", emailErr);
         }
 
         return res.status(200).json({

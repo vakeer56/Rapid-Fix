@@ -81,6 +81,21 @@ const problemSchema = new mongoose.Schema(
     urgency: {
         type: Boolean,
         default: false
+    },
+
+    isConfirmedByCustomer: {
+        type: Boolean,
+        default: false
+    },
+
+    confirmationExpiresAt: {
+        type: Date,
+        default: null
+    },
+
+    isWorkerHeadingOver: {
+        type: Boolean,
+        default: false
     }
 },
     { timestamps: true }

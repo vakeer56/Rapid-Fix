@@ -1,6 +1,8 @@
 const User = require("../model/user.model");
 const Workers = require("../model/workers.model");
 const Worker = Workers;
+const nodemailerService = require("../services/nodemailer.service");
+
 
 const uploadWorkerPhoto = async (photoBase64) => {
     if (!photoBase64) return "";
@@ -210,6 +212,9 @@ const completeProfileController = async(req, res) => {
                 authProvider: "twilio",
                 isPhoneVerified: true, // Verified via Twilio SMS OTP
             });
+            if (account && account.email) {
+                nodemailerService.sendCustomerWelcomeEmail(account.email, account.name).catch(console.error);
+            }
         }
 
         if (role === "worker") {
@@ -222,6 +227,7 @@ const completeProfileController = async(req, res) => {
                 located_address,
                 photo,
                 categories,
+                email
             } = req.body;
 
             if (!name || !age || !gender || experience === undefined || !located_address || !photo || !preferred_areas || !categories) {
@@ -259,9 +265,14 @@ const completeProfileController = async(req, res) => {
                 located_address,
                 photo: uploadedPhotoUrl,
                 phone,
+                email: email || '',
                 authProvider: "twilio",
                 categories: uniqueCategories,
             });
+
+            if (account && account.email) {
+                nodemailerService.sendWorkerWelcomeEmail(account.email, account.name).catch(console.error);
+            }
         }
 
         const token = generateAccessToken({
@@ -649,6 +660,9 @@ const firebaseCompleteProfileController = async (req, res) => {
                     authProvider: 'firebase',
                     isEmailVerified: true, // Google signup/login automatically verifies email
                 });
+                if (account && account.email) {
+                    nodemailerService.sendWorkerWelcomeEmail(account.email, account.name).catch(console.error);
+                }
             }
 
             const token = generateAccessToken({
@@ -704,6 +718,9 @@ const firebaseCompleteProfileController = async (req, res) => {
                     isEmailVerified: true, // Google signup/login automatically verifies email
                     isPhoneVerified: false,
                 });
+                if (user && user.email) {
+                    nodemailerService.sendCustomerWelcomeEmail(user.email, user.name).catch(console.error);
+                }
             }
 
             const token = generateAccessToken({

@@ -21,6 +21,10 @@ const originalSendEmailOtp = nodemailerService.sendEmailOtp;
 const originalSendWorkerAcceptedEmail = nodemailerService.sendWorkerAcceptedEmail;
 const originalSendWorkerReachedEmail = nodemailerService.sendWorkerReachedEmail;
 const originalSendProblemResolvedEmail = nodemailerService.sendProblemResolvedEmail;
+const originalSendWorkerPendingConfirmationEmail = nodemailerService.sendWorkerPendingConfirmationEmail;
+const originalSendCustomerApprovedWorkerEmail = nodemailerService.sendCustomerApprovedWorkerEmail;
+const originalSendCustomerRejectedWorkerEmail = nodemailerService.sendCustomerRejectedWorkerEmail;
+const originalSendAutoAcceptedWorkerEmail = nodemailerService.sendAutoAcceptedWorkerEmail;
 
 function createRes() {
   return {
@@ -48,6 +52,10 @@ test.afterEach(() => {
   nodemailerService.sendWorkerAcceptedEmail = originalSendWorkerAcceptedEmail;
   nodemailerService.sendWorkerReachedEmail = originalSendWorkerReachedEmail;
   nodemailerService.sendProblemResolvedEmail = originalSendProblemResolvedEmail;
+  nodemailerService.sendWorkerPendingConfirmationEmail = originalSendWorkerPendingConfirmationEmail;
+  nodemailerService.sendCustomerApprovedWorkerEmail = originalSendCustomerApprovedWorkerEmail;
+  nodemailerService.sendCustomerRejectedWorkerEmail = originalSendCustomerRejectedWorkerEmail;
+  nodemailerService.sendAutoAcceptedWorkerEmail = originalSendAutoAcceptedWorkerEmail;
 });
 
 test("updateProfileController resets worker isEmailVerified when email changes", async () => {
@@ -266,7 +274,7 @@ test("verifyEmailOtpController rejects incorrect code", async () => {
   assert.equal(saved, false);
 });
 
-test("workerAcceptProblem triggers sendWorkerAcceptedEmail notification", async () => {
+test("workerAcceptProblem triggers sendWorkerPendingConfirmationEmail notification", async () => {
   let workerUpdated = false;
   let problem = {
     _id: "problem-123",
@@ -296,7 +304,7 @@ test("workerAcceptProblem triggers sendWorkerAcceptedEmail notification", async 
   let sentCustomerName = null;
   let sentWorkerName = null;
   let sentProblemName = null;
-  nodemailerService.sendWorkerAcceptedEmail = async (custEmail, custName, workName, probName) => {
+  nodemailerService.sendWorkerPendingConfirmationEmail = async (custEmail, custName, workName, probName) => {
     sentEmail = custEmail;
     sentCustomerName = custName;
     sentWorkerName = workName;

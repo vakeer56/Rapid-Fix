@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const problemModel = require('../model/problem.model');
 const workerModel = require('../model/workers.model');
 const addressModel = require('../model/address.model');
+const { checkAndApplyAutoAcceptance } = require('./workers.controller');
 
 const getAllProblems = async (req, res) => {
     try {
@@ -13,6 +14,8 @@ const getAllProblems = async (req, res) => {
         if(!worker){
             return res.status(404).json({message: "Worker not found"});
         }
+        // Check and apply auto-acceptance for expired timers
+        await checkAndApplyAutoAcceptance(req);
         const preferred_areas = worker.preferred_areas;
         if(!preferred_areas.length){
             return res.status(404).json({message: "Worker has no preferred areas"});
@@ -56,7 +59,6 @@ const getAllProblems = async (req, res) => {
             $match: {
             status: "pending",
             assigned_worker: null,
-            rejected_workers: { $nin: [workerObjectId] },
             $or: [
                 { category: "Other" },
                 { category: { $in: worker.categories || [] } }

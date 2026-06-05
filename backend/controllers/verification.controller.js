@@ -1,6 +1,7 @@
 const Worker = require('../model/workers.model');
 const cloudinary = require('../config/cloudinary.js');
 const fs = require('fs');
+const nodemailerService = require("../services/nodemailer.service");
 
 // Uploads temp multer files to Cloudinary and returns their secure URLs.
 // Mirrors the pattern used in community.controller.js / problems.controller.js.
@@ -149,6 +150,18 @@ const approveVerification = async (req, res) => {
         worker.governmentVerification.reviewedAt = new Date();
         worker.governmentVerification.rejectionReason = "";
         await worker.save();
+
+        // Send email to worker notifying document verification approval
+        try {
+            if (worker.email) {
+                await nodemailerService.sendWorkerDocumentVerifiedEmail(
+                    worker.email,
+                    worker.name
+                );
+            }
+        } catch (emailErr) {
+            console.error("[approveVerification] Email notification error:", emailErr);
+        }
 
         return res.status(200).json({
             success: true,

@@ -21,6 +21,7 @@ const {
   workerAcceptProblem,
   userAcceptWorker,
   userRejectWorker,
+  workerIntimateComing,
 } = require("../controllers/workers.controller.js");
 
 const originalProblemSave = Problem.prototype.save;
@@ -50,6 +51,13 @@ function createRes() {
 test.beforeEach(() => {
   User.findById = async () => ({ _id: "user-1", name: "Mock User", email: "mock@user.com" });
   Worker.findById = async () => ({ _id: "worker-1", name: "Mock Worker", email: "mock@worker.com" });
+  Problem.findById = async () => ({
+    _id: "problem-1",
+    status: "on the way",
+    isConfirmedByCustomer: false,
+    assigned_worker: "worker-1",
+    save: async () => {}
+  });
 });
 
 test.afterEach(() => {
@@ -220,12 +228,10 @@ test("workerAcceptProblem claims an available problem for a worker", async () =>
       assigned_worker: null,
       rejected_workers: { $ne: "worker-1" },
     });
-    assert.deepEqual(update, {
-      $set: {
-        assigned_worker: "worker-1",
-        status: "on the way",
-      },
-    });
+    assert.equal(update.$set.assigned_worker, "worker-1");
+    assert.equal(update.$set.status, "on the way");
+    assert.equal(update.$set.isConfirmedByCustomer, false);
+    assert.ok(update.$set.confirmationExpiresAt instanceof Date);
     assert.deepEqual(options, { new: true });
     return updatedProblem;
   };
@@ -326,6 +332,7 @@ test("userAcceptWorker rejects a mismatched assigned worker", async () => {
 test("userAcceptWorker returns success when the assigned worker matches", async () => {
   const problem = {
     assigned_worker: { toString: () => "worker-3" },
+    save: async () => {}
   };
   Problem.findById = async () => problem;
 
@@ -341,3 +348,147 @@ test("userAcceptWorker returns success when the assigned worker matches", async 
     data: problem,
   });
 });
+
+test("workerIntimateComing returns 404 if problem not found", async () => {
+  Problem.findById = async () => null;
+
+  const req = { body: { problemId: "problem-none", workerId: "worker-1" } };
+  const res = createRes();
+
+  await workerIntimateComing(req, res);
+
+  assert.equal(res.statusCode, 404);
+  assert.deepEqual(res.body, {
+    success: false,
+    message: "Problem not found",
+  });
+});
+
+test("workerIntimateComing returns 400 if worker mismatch", async () => {
+  Problem.findById = async () => ({
+    assigned_worker: { toString: () => "worker-2" }
+  });
+
+  const req = { body: { problemId: "problem-1", workerId: "worker-1" } };
+  const res = createRes();
+
+  await workerIntimateComing(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(res.body, {
+    success: false,
+    message: "Invalid worker",
+  });
+});
+
+test("workerIntimateComing sets isWorkerHeadingOver and returns 200 on success", async () => {
+  let saved = false;
+  const problem = {
+    assigned_worker: { toString: () => "worker-1" },
+    isWorkerHeadingOver: false,
+    save: async () => {
+      saved = true;
+    }
+  };
+  Problem.findById = async () => problem;
+
+  const req = {
+    body: { problemId: "problem-1", workerId: "worker-1" },
+    app: {
+      get: (key) => null
+    }
+  };
+  const res = createRes();
+
+  await workerIntimateComing(req, res);
+
+  assert.equal(problem.isWorkerHeadingOver, true);
+  assert.equal(saved, true);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.message, "Customer intimated successfully");
+});
+
+const { approveVerification, rejectVerification } = require("../controllers/verification.controller.js");
+
+test("approveVerification approves a pending worker documents and sends email", async () => {
+  let saved = false;
+  let emailSent = null;
+
+  const mockWorker = {
+    _id: "worker-verified-1",
+    name: "Doc Worker",
+    email: "doc@worker.com",
+    governmentVerification: {
+      status: "pending",
+      reviewedAt: null,
+      rejectionReason: ""
+    },
+    save: async function() {
+      saved = true;
+    },
+    get badge() {
+      return { tier: "verified_pro", label: "Verified Pro" };
+    }
+  };
+
+  Worker.findById = async () => mockWorker;
+  nodemailerService.sendWorkerDocumentVerifiedEmail = async (email, name) => {
+    emailSent = { email, name };
+  };
+
+  const req = {
+    params: { id: "worker-verified-1" }
+  };
+  const res = createRes();
+
+  await approveVerification(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(mockWorker.governmentVerification.status, "approved");
+  assert.ok(mockWorker.governmentVerification.reviewedAt instanceof Date);
+  assert.equal(saved, true);
+  assert.deepEqual(emailSent, {
+    email: "doc@worker.com",
+    name: "Doc Worker"
+  });
+});
+
+test("rejectVerification rejects a pending worker documents without email", async () => {
+  let saved = false;
+
+  const mockWorker = {
+    _id: "worker-verified-2",
+    name: "Rejected Worker",
+    email: "rejected@worker.com",
+    governmentVerification: {
+      status: "pending",
+      reviewedAt: null,
+      rejectionReason: ""
+    },
+    save: async function() {
+      saved = true;
+    },
+    get badge() {
+      return { tier: "verified", label: "Verified" };
+    }
+  };
+
+  Worker.findById = async () => mockWorker;
+
+  const req = {
+    params: { id: "worker-verified-2" },
+    body: { rejectionReason: "Blurry images" }
+  };
+  const res = createRes();
+
+  await rejectVerification(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(mockWorker.governmentVerification.status, "rejected");
+  assert.equal(mockWorker.governmentVerification.rejectionReason, "Blurry images");
+  assert.equal(saved, true);
+});
+

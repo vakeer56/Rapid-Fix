@@ -126,9 +126,119 @@ const sendProblemResolvedEmail = async (customerEmail, customerName, workerName,
     return sendNotificationEmail(customerEmail, "Service Completed", title, bodyHtml);
 };
 
+const sendWorkerPendingConfirmationEmail = async (customerEmail, customerName, workerName, problemName) => {
+    const title = "Worker Accept Request - Confirmation Needed";
+    const bodyHtml = `
+        <p>Dear ${customerName || "Customer"},</p>
+        <p>Our partner, <strong>${workerName}</strong>, has requested to accept your service request <strong>"${problemName}"</strong>.</p>
+        <p>Please log in to your dashboard to review their profile, rating, and complaint history. You have <strong>5 minutes</strong> to confirm or reject this request. If no action is taken, the request will be automatically accepted.</p>
+    `;
+    return sendNotificationEmail(customerEmail, "Worker confirmation required", title, bodyHtml);
+};
+
+const sendCustomerApprovedWorkerEmail = async (workerEmail, workerName, customerName, problemName, address) => {
+    const title = "Customer Confirmed Your Request!";
+    const bodyHtml = `
+        <p>Dear ${workerName || "Worker"},</p>
+        <p>Great news! The customer <strong>${customerName}</strong> has approved your request to handle <strong>"${problemName}"</strong>.</p>
+        <p>Please prepare to travel to the customer's address:</p>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 20px 0;">
+            <p style="margin: 0; font-weight: 600; color: #0f172a;">${address}</p>
+        </div>
+        <p>You can view full details in your active assignments dashboard.</p>
+    `;
+    return sendNotificationEmail(workerEmail, "Customer approved your request", title, bodyHtml);
+};
+
+const sendCustomerRejectedWorkerEmail = async (workerEmail, workerName, customerName, problemName) => {
+    const title = "Request Declined by Customer";
+    const bodyHtml = `
+        <p>Dear ${workerName || "Worker"},</p>
+        <p>The customer <strong>${customerName}</strong> has declined your request to handle <strong>"${problemName}"</strong>.</p>
+        <p>You do not need to come. The problem has been returned to the public feed, but you will not be able to accept it again.</p>
+    `;
+    return sendNotificationEmail(workerEmail, "Customer declined your request", title, bodyHtml);
+};
+
+const sendAutoAcceptedWorkerEmail = async (workerEmail, workerName, customerName, problemName, address) => {
+    const title = "Your Request has been Auto-Accepted!";
+    const bodyHtml = `
+        <p>Dear ${workerName || "Worker"},</p>
+        <p>Your request to handle <strong>"${problemName}"</strong> has been automatically accepted since the customer did not respond within 5 minutes.</p>
+        <p>Please prepare to travel to the customer's address:</p>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 20px 0;">
+            <p style="margin: 0; font-weight: 600; color: #0f172a;">${address}</p>
+        </div>
+        <p>You can view full details in your active assignments dashboard.</p>
+    `;
+    return sendNotificationEmail(workerEmail, "Request auto-accepted", title, bodyHtml);
+};
+
+const sendCustomerWelcomeEmail = async (customerEmail, customerName) => {
+    const title = "Welcome to RapidFix! 🛠️";
+    const bodyHtml = `
+        <p>Dear ${customerName || "Customer"},</p>
+        <p>Welcome to <strong>RapidFix</strong>! We are thrilled to have you as a part of our home services family.</p>
+        <p>Whether you need an emergency plumbing fix, electrical repairs, or regular home maintenance, RapidFix makes it simple to connect with verified specialist technicians in your area in real-time.</p>
+        <p>Head to your dashboard to raise your first service request now!</p>
+    `;
+    return sendNotificationEmail(customerEmail, "Welcome to RapidFix", title, bodyHtml);
+};
+
+const sendWorkerWelcomeEmail = async (workerEmail, workerName) => {
+    const title = "Welcome to the RapidFix Team! 🤝";
+    const bodyHtml = `
+        <p>Dear ${workerName || "Specialist Partner"},</p>
+        <p>Welcome to <strong>RapidFix</strong>! We are incredibly happy to have you join our team of verified specialist partners.</p>
+        <p>As a RapidFix Service Partner, you will receive real-time job dispatches within your preferred areas. You can claim dispatches, notify customers of your arrival, and receive payments directly.</p>
+        <p>Happy repairing, and welcome to the team!</p>
+    `;
+    return sendNotificationEmail(workerEmail, "Happy to have you on the team", title, bodyHtml);
+};
+
+const sendWorkerDisputeApprovedEmail = async (workerEmail, workerName, complaintTitle) => {
+    const title = "Dispute Approved - Complaint Deleted";
+    const bodyHtml = `
+        <p>Dear ${workerName || "Worker"},</p>
+        <p>Our administration team has reviewed your dispute request regarding the complaint <strong>"${complaintTitle}"</strong>.</p>
+        <p>We are pleased to inform you that your dispute has been <strong>approved</strong>. The complaint has been successfully deleted from your profile and will no longer affect your ratings or badges.</p>
+    `;
+    return sendNotificationEmail(workerEmail, "Dispute Approved", title, bodyHtml);
+};
+
+const sendWorkerDisputeRejectedEmail = async (workerEmail, workerName, complaintTitle) => {
+    const title = "Dispute Rejected - Complaint Remains Active";
+    const bodyHtml = `
+        <p>Dear ${workerName || "Worker"},</p>
+        <p>Our administration team has reviewed your dispute request regarding the complaint <strong>"${complaintTitle}"</strong>.</p>
+        <p>Unfortunately, your dispute has been <strong>rejected</strong>. The complaint remains active on your profile as filed by the customer.</p>
+    `;
+    return sendNotificationEmail(workerEmail, "Dispute Rejected", title, bodyHtml);
+};
+
+const sendWorkerDocumentVerifiedEmail = async (workerEmail, workerName) => {
+    const title = "Government Document Verification Successful! 🎖️";
+    const bodyHtml = `
+        <p>Dear ${workerName || "Worker"},</p>
+        <p>Congratulations! Our verification team has successfully reviewed and approved your government verification documents.</p>
+        <p>Your account is now fully approved, enabling you to display the <strong>Verified Pro</strong> badge (and unlock higher tiers based on your ratings and completed jobs).</p>
+        <p>Thank you for partnering with RapidFix!</p>
+    `;
+    return sendNotificationEmail(workerEmail, "Government Documents Verified", title, bodyHtml);
+};
+
 module.exports = { 
     sendEmailOtp,
     sendWorkerAcceptedEmail,
     sendWorkerReachedEmail,
-    sendProblemResolvedEmail
+    sendProblemResolvedEmail,
+    sendWorkerPendingConfirmationEmail,
+    sendCustomerApprovedWorkerEmail,
+    sendCustomerRejectedWorkerEmail,
+    sendAutoAcceptedWorkerEmail,
+    sendCustomerWelcomeEmail,
+    sendWorkerWelcomeEmail,
+    sendWorkerDisputeApprovedEmail,
+    sendWorkerDisputeRejectedEmail,
+    sendWorkerDocumentVerifiedEmail
 };

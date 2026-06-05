@@ -4,7 +4,8 @@ const router = express.Router();
 const {
     workerAcceptProblem,
     userAcceptWorker,
-    userRejectWorker
+    userRejectWorker,
+    workerIntimateComing
 } = require("../controllers/workers.controller");
 
 router.post("/accept-problem", workerAcceptProblem);
@@ -12,5 +13,7 @@ router.post("/accept-problem", workerAcceptProblem);
 router.post("/reject-worker", userRejectWorker);
 
 router.post("/accept-worker", userAcceptWorker);
+
+router.post("/intimate-coming", workerIntimateComing);
 
 module.exports = router;

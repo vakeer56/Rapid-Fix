@@ -2,10 +2,19 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const Complaint = require("../model/complaint.model.js");
-const { disputeComplaint, revokeDisputeAdmin } = require("../controllers/complaint.controller.js");
+const Worker = require("../model/workers.model.js");
+const nodemailerService = require("../services/nodemailer.service.js");
+const { 
+  disputeComplaint, 
+  revokeDisputeAdmin,
+  deleteComplaintAdmin
+} = require("../controllers/complaint.controller.js");
 
 const originalFindOne = Complaint.findOne;
 const originalFindByIdAndUpdate = Complaint.findByIdAndUpdate;
+const originalFindByIdAndDelete = Complaint.findByIdAndDelete;
+const originalWorkerFindById = Worker.findById;
+const originalWorkerFindByIdAndUpdate = Worker.findByIdAndUpdate;
 
 function createRes() {
   return {
@@ -25,6 +34,9 @@ function createRes() {
 test.afterEach(() => {
   Complaint.findOne = originalFindOne;
   Complaint.findByIdAndUpdate = originalFindByIdAndUpdate;
+  Complaint.findByIdAndDelete = originalFindByIdAndDelete;
+  Worker.findById = originalWorkerFindById;
+  Worker.findByIdAndUpdate = originalWorkerFindByIdAndUpdate;
 });
 
 test("disputeComplaint disputes a pending complaint successfully", async () => {
@@ -108,15 +120,34 @@ test("disputeComplaint fails if the complaint is already disputed", async () => 
   assert.equal(saved, false);
 });
 
-test("revokeDisputeAdmin updates status to revoked", async () => {
+test("revokeDisputeAdmin updates status to revoked and triggers email", async () => {
   let updatedData = null;
+  let emailSent = null;
+
   Complaint.findByIdAndUpdate = async (id, update, options) => {
     updatedData = { id, update };
-    return { _id: id, status: "revoked" };
+    return { 
+      _id: id, 
+      worker_id: "worker-123", 
+      title: "Bad service",
+      status: "revoked" 
+    };
+  };
+
+  Worker.findById = async (id) => {
+    return {
+      _id: id,
+      name: "John Worker",
+      email: "john@worker.com"
+    };
+  };
+
+  nodemailerService.sendWorkerDisputeRejectedEmail = async (email, name, title) => {
+    emailSent = { email, name, title };
   };
 
   const req = {
-    params: { id: "complaint-1" }
+    params: { id: "complaint-123" }
   };
   const res = createRes();
 
@@ -126,7 +157,63 @@ test("revokeDisputeAdmin updates status to revoked", async () => {
   assert.equal(res.body.success, true);
   assert.equal(res.body.complaint.status, "revoked");
   assert.deepEqual(updatedData, {
-    id: "complaint-1",
+    id: "complaint-123",
     update: { status: "revoked" }
+  });
+  assert.deepEqual(emailSent, {
+    email: "john@worker.com",
+    name: "John Worker",
+    title: "Bad service"
+  });
+});
+
+test("deleteComplaintAdmin deletes a complaint and triggers approved email", async () => {
+  let deletedId = null;
+  let workerUpdated = null;
+  let emailSent = null;
+
+  Complaint.findByIdAndDelete = async (id) => {
+    deletedId = id;
+    return {
+      _id: id,
+      worker_id: "worker-123",
+      title: "Bad service"
+    };
+  };
+
+  Worker.findByIdAndUpdate = async (id, update) => {
+    workerUpdated = { id, update };
+  };
+
+  Worker.findById = async (id) => {
+    return {
+      _id: id,
+      name: "John Worker",
+      email: "john@worker.com"
+    };
+  };
+
+  nodemailerService.sendWorkerDisputeApprovedEmail = async (email, name, title) => {
+    emailSent = { email, name, title };
+  };
+
+  const req = {
+    params: { id: "complaint-123" }
+  };
+  const res = createRes();
+
+  await deleteComplaintAdmin(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(deletedId, "complaint-123");
+  assert.deepEqual(workerUpdated, {
+    id: "worker-123",
+    update: { $inc: { complaintsCount: -1 } }
+  });
+  assert.deepEqual(emailSent, {
+    email: "john@worker.com",
+    name: "John Worker",
+    title: "Bad service"
   });
 });

@@ -26,11 +26,54 @@ import {
   Check,
   Loader2,
   Truck,
+  Send,
   X,
+  XCircle,
   FileText,
   UploadCloud,
   Crown
 } from "lucide-react";
+
+const CountdownTimer = ({ expiresAt, onExpire }: { expiresAt: string | Date; onExpire?: () => void }) => {
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+
+  useEffect(() => {
+    const calculateTime = () => {
+      const difference = new Date(expiresAt).getTime() - Date.now();
+      return difference > 0 ? Math.max(0, Math.floor(difference / 1000)) : 0;
+    };
+
+    setTimeLeft(calculateTime());
+
+    const interval = setInterval(() => {
+      const rem = calculateTime();
+      setTimeLeft(rem);
+      if (rem <= 0) {
+        clearInterval(interval);
+        if (onExpire) {
+          onExpire();
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [expiresAt, onExpire]);
+
+  if (timeLeft <= 0) {
+    return <span className="font-extrabold text-red-500 animate-pulse">00:00 (Auto-accepting...)</span>;
+  }
+
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  const mm = minutes.toString().padStart(2, "0");
+  const ss = seconds.toString().padStart(2, "0");
+
+  return (
+    <span className="font-extrabold text-amber-500 font-mono tracking-wider">
+      {mm}:{ss}
+    </span>
+  );
+};
 
 interface AssignedWorker {
   _id: string;
@@ -77,6 +120,10 @@ interface ProblemRequest {
     phone: string;
   };
   amountReceived?: number;
+  isConfirmedByCustomer?: boolean;
+  confirmationExpiresAt?: string;
+  rejected_workers?: any[];
+  isWorkerHeadingOver?: boolean;
 }
 
 export default function Dashboard() {
@@ -335,6 +382,42 @@ export default function Dashboard() {
     }
   };
 
+  const handleAcceptWorker = async (problemId: string, workerId: string) => {
+    try {
+      const res = await api.post("/workers/accept-worker", { problemId, workerId });
+      if (res.data && res.data.success) {
+        showAlert("Success", "Technician assigned successfully!", "success");
+        fetchRequests();
+      } else {
+        showAlert("Error", res.data?.message || "Failed to accept worker.", "error");
+      }
+    } catch (err: any) {
+      console.error("Accept worker error:", err);
+      showAlert("Error", err?.response?.data?.message || "An error occurred while accepting worker.", "error");
+    }
+  };
+
+  const handleRejectWorker = async (problemId: string, workerId: string) => {
+    showConfirm(
+      "Reject Technician",
+      "Are you sure you want to decline this specialist? This request will go back to the public queue.",
+      async () => {
+        try {
+          const res = await api.post("/workers/reject-worker", { problemId, workerId });
+          if (res.data && res.data.success) {
+            showAlert("Success", "Technician declined successfully.", "success");
+            fetchRequests();
+          } else {
+            showAlert("Error", res.data?.message || "Failed to reject worker.", "error");
+          }
+        } catch (err: any) {
+          console.error("Reject worker error:", err);
+          showAlert("Error", err?.response?.data?.message || "An error occurred while rejecting worker.", "error");
+        }
+      }
+    );
+  };
+
   const fetchAvailableJobs = async () => {
     if (!appUser?._id) return;
     setAvailableLoading(true);
@@ -403,6 +486,24 @@ export default function Dashboard() {
       }
     } catch (err: any) {
       await showAlert("Start Progress Error", err?.response?.data?.message || "Failed to start progress.", "error");
+    } finally {
+      setProgressLoadingId(null);
+    }
+  };
+
+  const handleIntimateComing = async (problemId: string) => {
+    if (!appUser?._id) return;
+    setProgressLoadingId(problemId);
+    try {
+      const res = await api.post("/workers/intimate-coming", {
+        problemId,
+        workerId: appUser._id
+      });
+      if (res.data.success) {
+        await Promise.all([fetchAvailableJobs(), fetchActiveAssignments()]);
+      }
+    } catch (err: any) {
+      await showAlert("Intimate Error", err?.response?.data?.message || "Failed to intimate customer.", "error");
     } finally {
       setProgressLoadingId(null);
     }
@@ -921,112 +1022,128 @@ export default function Dashboard() {
                 ) : (
                   /* Cards Feed */
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {availableJobs.map((job) => (
-                      <div 
-                        key={job._id}
-                        className="group glass-panel rounded-3xl hover:border-orange-500/40 transition-all duration-300 p-6 flex flex-col justify-between hover:shadow-xl hover:shadow-orange-500/[0.02] hover:-translate-y-0.5"
-                      >
-                        <div>
-                          <div className="flex items-start justify-between gap-4 mb-3">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-bold text-base text-white line-clamp-1">{job.name}</h4>
-                                {getCategoryBadge(job.category)}
-                                {job.urgency && (
-                                  <span className="text-[9px] font-black uppercase tracking-wider bg-red-500/10 border border-red-500/30 text-red-400 px-2 py-0.5 rounded">
-                                    Urgent
-                                  </span>
-                                )}
+                    {availableJobs.map((job) => {
+                      const isRejected = job.rejected_workers?.some((id: any) => (id?._id || id) === appUser?._id);
+                      return (
+                        <div 
+                          key={job._id}
+                          className={`group glass-panel rounded-3xl transition-all duration-300 p-6 flex flex-col justify-between hover:shadow-xl hover:shadow-orange-500/[0.02] ${
+                            isRejected 
+                              ? "opacity-55 border-red-500/20 bg-red-950/[0.02] select-none" 
+                              : "hover:border-orange-500/40 hover:-translate-y-0.5"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-4 mb-3">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-bold text-base text-white line-clamp-1">{job.name}</h4>
+                                  {getCategoryBadge(job.category)}
+                                  {job.urgency && (
+                                    <span className="text-[9px] font-black uppercase tracking-wider bg-red-500/10 border border-red-500/30 text-red-400 px-2 py-0.5 rounded">
+                                      Urgent
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                                  <Calendar size={11} />
+                                  {new Date(job.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                                </span>
                               </div>
-                              <span className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
-                                <Calendar size={11} />
-                                {new Date(job.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
-                              </span>
                             </div>
-                          </div>
- 
-                           <p className="text-slate-400 text-xs leading-relaxed mb-4 line-clamp-3">{job.description}</p>
- 
-                           {job.address && (
-                             <div className="flex items-start gap-2 text-[11px] text-slate-400 bg-slate-950/40 rounded-2xl p-3 border border-slate-850 mb-4">
-                               <MapPin size={12} className="text-orange-500 mt-0.5 shrink-0" />
-                               <span>{job.address.address}, {job.address.area}, {job.address.city}</span>
-                             </div>
-                           )}
- 
-                           {/* Media Grid Carousel */}
-                           {((job.pictures && job.pictures.length > 0) || (job.videos && job.videos.length > 0) || job.picture || job.video) && (
-                             <div className="space-y-1.5 mb-4">
-                               <span className="text-[9px] uppercase font-bold text-slate-500">Diagnostics Attached</span>
-                               <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
-                                 {job.pictures && job.pictures.length > 0 ? (
-                                   job.pictures.map((picUrl, idx) => (
+   
+                             <p className="text-slate-400 text-xs leading-relaxed mb-4 line-clamp-3">{job.description}</p>
+   
+                             {job.address && (
+                               <div className="flex items-start gap-2 text-[11px] text-slate-400 bg-slate-950/40 rounded-2xl p-3 border border-slate-850 mb-4">
+                                 <MapPin size={12} className="text-orange-500 mt-0.5 shrink-0" />
+                                 <span>{job.address.address}, {job.address.area}, {job.address.city}</span>
+                               </div>
+                             )}
+   
+                             {/* Media Grid Carousel */}
+                             {((job.pictures && job.pictures.length > 0) || (job.videos && job.videos.length > 0) || job.picture || job.video) && (
+                               <div className="space-y-1.5 mb-4">
+                                 <span className="text-[9px] uppercase font-bold text-slate-500">Diagnostics Attached</span>
+                                 <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
+                                   {job.pictures && job.pictures.length > 0 ? (
+                                     job.pictures.map((picUrl, idx) => (
+                                       <a
+                                         key={`pic-${idx}`}
+                                         href={picUrl}
+                                         target="_blank"
+                                         rel="noopener noreferrer"
+                                         className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-800 hover:border-orange-500/50 transition-all shadow-md group block"
+                                       >
+                                         <img src={picUrl} alt={`Diagnostic ${idx + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                       </a>
+                                     ))
+                                   ) : job.picture ? (
                                      <a
-                                       key={`pic-${idx}`}
-                                       href={picUrl}
+                                       href={job.picture}
                                        target="_blank"
                                        rel="noopener noreferrer"
                                        className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-800 hover:border-orange-500/50 transition-all shadow-md group block"
                                      >
-                                       <img src={picUrl} alt={`Diagnostic ${idx + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                       <img src={job.picture} alt="Diagnostic Picture" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                                      </a>
-                                   ))
-                                 ) : job.picture ? (
-                                   <a
-                                     href={job.picture}
-                                     target="_blank"
-                                     rel="noopener noreferrer"
-                                     className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-800 hover:border-orange-500/50 transition-all shadow-md group block"
-                                   >
-                                     <img src={job.picture} alt="Diagnostic Picture" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                                   </a>
-                                 ) : null}
-
-                                 {job.videos && job.videos.length > 0 ? (
-                                   job.videos.map((vidUrl, idx) => (
+                                   ) : null}
+  
+                                   {job.videos && job.videos.length > 0 ? (
+                                     job.videos.map((vidUrl, idx) => (
+                                       <a
+                                         key={`vid-${idx}`}
+                                         href={vidUrl}
+                                         target="_blank"
+                                         rel="noopener noreferrer"
+                                         className="relative w-14 h-14 rounded-lg bg-indigo-950/40 border border-indigo-900 hover:border-orange-500/50 transition-all shadow-md flex flex-col items-center justify-center shrink-0 group text-center"
+                                       >
+                                         <Video size={14} className="text-indigo-400 group-hover:scale-105 transition-transform" />
+                                         <span className="text-[6px] text-slate-405 font-bold uppercase mt-0.5">Clip {idx + 1}</span>
+                                       </a>
+                                     ))
+                                   ) : job.video ? (
                                      <a
-                                       key={`vid-${idx}`}
-                                       href={vidUrl}
+                                       href={job.video}
                                        target="_blank"
                                        rel="noopener noreferrer"
                                        className="relative w-14 h-14 rounded-lg bg-indigo-950/40 border border-indigo-900 hover:border-orange-500/50 transition-all shadow-md flex flex-col items-center justify-center shrink-0 group text-center"
                                      >
                                        <Video size={14} className="text-indigo-400 group-hover:scale-105 transition-transform" />
-                                       <span className="text-[6px] text-slate-405 font-bold uppercase mt-0.5">Clip {idx + 1}</span>
+                                       <span className="text-[6px] text-slate-405 font-bold uppercase mt-0.5">Clip</span>
                                      </a>
-                                   ))
-                                 ) : job.video ? (
-                                   <a
-                                     href={job.video}
-                                     target="_blank"
-                                     rel="noopener noreferrer"
-                                     className="relative w-14 h-14 rounded-lg bg-indigo-950/40 border border-indigo-900 hover:border-orange-500/50 transition-all shadow-md flex flex-col items-center justify-center shrink-0 group text-center"
-                                   >
-                                     <Video size={14} className="text-indigo-400 group-hover:scale-105 transition-transform" />
-                                     <span className="text-[6px] text-slate-405 font-bold uppercase mt-0.5">Clip</span>
-                                   </a>
-                                 ) : null}
+                                   ) : null}
+                                 </div>
                                </div>
-                             </div>
-                           )}
+                             )}
+                          </div>
+  
+                          <button
+                            onClick={() => !isRejected && handleClaimJob(job._id)}
+                            disabled={claimLoadingId === job._id || isRejected}
+                            className={`w-full mt-2 py-3 rounded-2xl font-bold text-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer ${
+                              isRejected
+                                ? "bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed"
+                                : "bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20"
+                            }`}
+                          >
+                            {claimLoadingId === job._id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : isRejected ? (
+                              <>
+                                <XCircle size={14} className="text-red-500/80" />
+                                Declined by Customer
+                              </>
+                            ) : (
+                              <>
+                                <Check size={14} />
+                                Claim Job Dispatch
+                              </>
+                            )}
+                          </button>
                         </div>
-
-                        <button
-                          onClick={() => handleClaimJob(job._id)}
-                          disabled={claimLoadingId === job._id}
-                          className="w-full mt-2 py-3 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold text-xs transition-all active:scale-[0.98] shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer"
-                        >
-                          {claimLoadingId === job._id ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
-                            <>
-                              <Check size={14} />
-                              Claim Job Dispatch
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1190,20 +1307,55 @@ export default function Dashboard() {
                         {/* Control Actions Panel */}
                         <div className="shrink-0 flex flex-col gap-3 justify-center w-full sm:w-48">
                           {assignment.status === "on the way" ? (
-                            <button
-                              onClick={() => handleStartProgress(assignment._id)}
-                              disabled={progressLoadingId === assignment._id}
-                              className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition-all active:scale-[0.98] shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer"
-                            >
-                              {progressLoadingId === assignment._id ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                <>
-                                  <Truck size={14} />
-                                  Arrived & Start
-                                </>
-                              )}
-                            </button>
+                            !assignment.isConfirmedByCustomer ? (
+                              <div className="flex flex-col gap-2 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center shadow-lg shadow-amber-500/[0.02]">
+                                <span className="text-[10px] font-black text-amber-500 uppercase tracking-wider flex items-center justify-center gap-1.5">
+                                  <Clock size={12} className="animate-pulse" />
+                                  Awaiting Confirmation
+                                </span>
+                                {assignment.confirmationExpiresAt && (
+                                  <div className="text-xs text-slate-400 font-medium">
+                                    Expires in: <CountdownTimer expiresAt={assignment.confirmationExpiresAt} onExpire={fetchActiveAssignments} />
+                                  </div>
+                                )}
+                                <button
+                                  disabled
+                                  className="w-full py-2.5 mt-1 rounded-xl bg-slate-800 text-slate-500 font-bold text-[10px] transition-all cursor-not-allowed border border-slate-700/50"
+                                >
+                                  Intimate I will come soon (Locked)
+                                </button>
+                              </div>
+                            ) : !assignment.isWorkerHeadingOver ? (
+                              <button
+                                onClick={() => handleIntimateComing(assignment._id)}
+                                disabled={progressLoadingId === assignment._id}
+                                className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition-all active:scale-[0.98] shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer"
+                              >
+                                {progressLoadingId === assignment._id ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <>
+                                    <Send size={14} />
+                                    Intimate I will come soon
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleStartProgress(assignment._id)}
+                                disabled={progressLoadingId === assignment._id}
+                                className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition-all active:scale-[0.98] shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer"
+                              >
+                                {progressLoadingId === assignment._id ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <>
+                                    <Truck size={14} />
+                                    Arrived & Start Work
+                                  </>
+                                )}
+                              </button>
+                            )
                           ) : assignment.status === "in progress" ? (
                             <button
                               onClick={() => triggerResolveModal(assignment._id)}
@@ -1668,7 +1820,12 @@ export default function Dashboard() {
                           })}
                         </span>
                       </div>
-                      {getStatusBadge(req.status)}
+                      {req.status === "on the way" && !req.isConfirmedByCustomer ? (
+                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900 animate-pulse">
+                          <Clock size={12} />
+                          Pending Confirmation
+                        </span>
+                      ) : getStatusBadge(req.status)}
                     </div>
 
                     {/* Body description */}
@@ -1751,6 +1908,17 @@ export default function Dashboard() {
                         if (!activeWorker || typeof activeWorker !== "object" || !activeWorker.name) return null;
                         return (
                           <div className="flex flex-col gap-3">
+                            {req.status === "on the way" && !req.isConfirmedByCustomer && (
+                              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-500 text-xs font-bold mb-1.5 animate-pulse">
+                                <span className="flex items-center gap-1.5">
+                                  <Clock size={13} />
+                                  Confirm specialist details. Auto-accepts in:
+                                </span>
+                                {req.confirmationExpiresAt && (
+                                  <CountdownTimer expiresAt={req.confirmationExpiresAt} onExpire={fetchRequests} />
+                                )}
+                              </div>
+                            )}
                             <div className="flex items-start justify-between">
                               <div className="flex items-start gap-3">
                                 <div className="relative w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 overflow-hidden shrink-0 mt-0.5">
@@ -1795,22 +1963,41 @@ export default function Dashboard() {
                               </div>
                               {req.status !== "resolved" && (
                                 <div className="flex gap-2 shrink-0">
-                                  <a
-                                    href={`tel:${activeWorker.phone}`}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-blue-600 dark:text-orange-400 rounded-xl text-[10px] font-bold no-underline transition-colors shrink-0"
-                                  >
-                                    <Phone size={11} />
-                                    Call Expert
-                                    {activeWorker.isPhoneVerified && (
-                                      <CheckCircle2 size={10} className="text-emerald-500 fill-emerald-500/10" />
-                                    )}
-                                  </a>
-                                  <button
-                                    onClick={() => setComplainingProblem(req)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-xl text-[10px] font-bold transition-colors shrink-0 cursor-pointer"
-                                  >
-                                    Report
-                                  </button>
+                                  {req.status === "on the way" && !req.isConfirmedByCustomer ? (
+                                    <>
+                                      <button
+                                        onClick={() => handleRejectWorker(req._id, activeWorker._id)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-650 hover:bg-red-500 text-white rounded-xl text-[10px] font-bold transition-all shadow-md cursor-pointer"
+                                      >
+                                        Decline
+                                      </button>
+                                      <button
+                                        onClick={() => handleAcceptWorker(req._id, activeWorker._id)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-650 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-bold transition-all shadow-md cursor-pointer"
+                                      >
+                                        Confirm
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <a
+                                        href={`tel:${activeWorker.phone}`}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-blue-600 dark:text-orange-400 rounded-xl text-[10px] font-bold no-underline transition-colors shrink-0"
+                                      >
+                                        <Phone size={11} />
+                                        Call Expert
+                                        {activeWorker.isPhoneVerified && (
+                                          <CheckCircle2 size={10} className="text-emerald-500 fill-emerald-500/10" />
+                                        )}
+                                      </a>
+                                      <button
+                                        onClick={() => setComplainingProblem(req)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-xl text-[10px] font-bold transition-colors shrink-0 cursor-pointer"
+                                      >
+                                        Report
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               )}
                             </div>
