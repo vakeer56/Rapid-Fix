@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { AlertCircle, CheckCircle, ShieldAlert, Info, HelpCircle } from "lucide-react";
 
 interface PopupOptions {
