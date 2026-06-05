@@ -492,3 +492,110 @@ test("rejectVerification rejects a pending worker documents without email", asyn
   assert.equal(saved, true);
 });
 
+const { deleteAccountController } = require("../controllers/auth.controller.js");
+
+test("deleteAccountController permanently deletes worker account and sends worker farewell email", async () => {
+  let workerDeletedId = null;
+  let emailSent = null;
+
+  Worker.findById = async (id) => {
+    return {
+      _id: id,
+      name: "Jim Worker",
+      email: "jim@worker.com"
+    };
+  };
+
+  Worker.findByIdAndDelete = async (id) => {
+    workerDeletedId = id;
+    return {};
+  };
+
+  const Problem = require("../model/problem.model.js");
+  const originalUpdateMany = Problem.updateMany;
+  let updateManyCalls = [];
+  Problem.updateMany = async (query, update) => {
+    updateManyCalls.push({ query, update });
+  };
+
+  nodemailerService.sendWorkerFarewellEmail = async (email, name) => {
+    emailSent = { email, name };
+  };
+
+  const req = {
+    user: { sub: "worker-delete-1", role: "worker" },
+    body: { confirmation: "worker@Jim Worker" }
+  };
+  const res = createRes();
+
+  await deleteAccountController(req, res);
+
+  Problem.updateMany = originalUpdateMany;
+
+  assert.equal(res.body.success, true);
+  assert.equal(workerDeletedId, "worker-delete-1");
+  assert.equal(updateManyCalls.length, 2);
+  assert.deepEqual(emailSent, {
+    email: "jim@worker.com",
+    name: "Jim Worker"
+  });
+});
+
+test("deleteAccountController permanently deletes customer account and sends customer farewell email", async () => {
+  let userDeletedId = null;
+  let emailSent = null;
+
+  User.findById = async (id) => {
+    return {
+      _id: id,
+      name: "Pam Customer",
+      email: "pam@customer.com"
+    };
+  };
+
+  User.findByIdAndDelete = async (id) => {
+    userDeletedId = id;
+    return {};
+  };
+
+  const Address = require("../model/address.model.js");
+  const Problem = require("../model/problem.model.js");
+  
+  const originalAddressDeleteMany = Address.deleteMany;
+  const originalProblemDeleteMany = Problem.deleteMany;
+
+  let addressDeleteQuery = null;
+  let problemDeleteQuery = null;
+
+  Address.deleteMany = async (query) => {
+    addressDeleteQuery = query;
+  };
+  Problem.deleteMany = async (query) => {
+    problemDeleteQuery = query;
+  };
+
+  nodemailerService.sendCustomerFarewellEmail = async (email, name) => {
+    emailSent = { email, name };
+  };
+
+  const req = {
+    user: { sub: "user-delete-1", role: "customer" },
+    body: { confirmation: "customer@Pam Customer" }
+  };
+  const res = createRes();
+
+  await deleteAccountController(req, res);
+
+  Address.deleteMany = originalAddressDeleteMany;
+  Problem.deleteMany = originalProblemDeleteMany;
+
+  assert.equal(res.body.success, true);
+  assert.equal(userDeletedId, "user-delete-1");
+  assert.deepEqual(addressDeleteQuery, { belong_to: "user-delete-1" });
+  assert.deepEqual(problemDeleteQuery, { userId: "user-delete-1" });
+  assert.deepEqual(emailSent, {
+    email: "pam@customer.com",
+    name: "Pam Customer"
+  });
+});
+

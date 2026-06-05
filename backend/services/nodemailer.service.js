@@ -227,6 +227,28 @@ const sendWorkerDocumentVerifiedEmail = async (workerEmail, workerName) => {
     return sendNotificationEmail(workerEmail, "Government Documents Verified", title, bodyHtml);
 };
 
+const sendCustomerFarewellEmail = async (customerEmail, customerName) => {
+    const title = "We'll Miss You! 💔";
+    const bodyHtml = `
+        <p>Dear ${customerName || "Customer"},</p>
+        <p>Your RapidFix account and all associated data have been permanently deleted as requested.</p>
+        <p>We are truly sad to see you go and we miss you already! Please know that the RapidFix family awaits your arrival whenever you need a quick, reliable fix in the future.</p>
+        <p>Thank you for having been a valued customer.</p>
+    `;
+    return sendNotificationEmail(customerEmail, "We'll Miss You", title, bodyHtml);
+};
+
+const sendWorkerFarewellEmail = async (workerEmail, workerName) => {
+    const title = "We'll Miss You! 💔";
+    const bodyHtml = `
+        <p>Dear ${workerName || "Specialist Partner"},</p>
+        <p>Your RapidFix Specialist Partner account and all associated data have been permanently deleted as requested.</p>
+        <p>We are truly sad to see you go and we miss you already! We want to thank you for all your hard work and help in fixing homes. Please know that the RapidFix family awaits your arrival and return to the team whenever you are ready to partner with us again.</p>
+        <p>Thank you for having been a valued member of our specialist team.</p>
+    `;
+    return sendNotificationEmail(workerEmail, "We'll Miss You", title, bodyHtml);
+};
+
 module.exports = { 
     sendEmailOtp,
     sendWorkerAcceptedEmail,
@@ -240,5 +262,7 @@ module.exports = {
     sendWorkerWelcomeEmail,
     sendWorkerDisputeApprovedEmail,
     sendWorkerDisputeRejectedEmail,
-    sendWorkerDocumentVerifiedEmail
+    sendWorkerDocumentVerifiedEmail,
+    sendCustomerFarewellEmail,
+    sendWorkerFarewellEmail
 };

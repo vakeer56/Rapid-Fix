@@ -1105,6 +1105,19 @@ const deleteAccountController = async (req, res) => {
             }
         }
 
+        // Send farewell email
+        try {
+            if (account.email) {
+                if (role === "worker") {
+                    await nodemailerService.sendWorkerFarewellEmail(account.email, account.name);
+                } else {
+                    await nodemailerService.sendCustomerFarewellEmail(account.email, account.name);
+                }
+            }
+        } catch (emailErr) {
+            console.error("[deleteAccountController] Farewell email notification error:", emailErr);
+        }
+
         if (role === "worker") {
             // Dissociate worker from active assignments and revert problem status to pending
             await Problem.updateMany(
