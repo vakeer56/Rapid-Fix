@@ -7,7 +7,16 @@ const authRoutes = require("./routes/auth.routes");;
 const app = express();
 
 const cors = require("cors");
-app.use(cors());
+
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://rapid-o76qg61zn-varuns-projects-ed5fdbfe.vercel.app"
+    ],
+    credentials: true
+  })
+);
 
 require('dotenv').config();
 
