@@ -392,26 +392,34 @@ export default function Dashboard() {
     }
   };
 
-  const handleRejectWorker = async (problemId: string, workerId: string) => {
-    showConfirm(
-      "Reject Technician",
-      "Are you sure you want to decline this specialist? This request will go back to the public queue.",
-      async () => {
-        try {
-          const res = await api.post("/workers/reject-worker", { problemId, workerId });
-          if (res.data && res.data.success) {
-            showAlert("Success", "Technician declined successfully.", "success");
-            fetchRequests();
-          } else {
-            showAlert("Error", res.data?.message || "Failed to reject worker.", "error");
-          }
-        } catch (err: any) {
-          console.error("Reject worker error:", err);
-          showAlert("Error", err?.response?.data?.message || "An error occurred while rejecting worker.", "error");
-        }
-      }
+const handleRejectWorker = async (problemId: string, workerId: string) => {
+  const confirmed = await showConfirm(
+    "Reject Technician",
+    "Are you sure you want to decline this specialist? This request will go back to the public queue."
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const res = await api.post("/workers/reject-worker", {
+      problemId,
+      workerId
+    });
+
+    if (res.data?.success) {
+      showAlert("Success", "Technician declined successfully.", "success");
+      fetchRequests();
+    } else {
+      showAlert("Error", res.data?.message || "Failed to reject worker.", "error");
+    }
+  } catch (err: any) {
+    showAlert(
+      "Error",
+      err?.response?.data?.message || "An error occurred while rejecting worker.",
+      "error"
     );
-  };
+  }
+};
 
   const fetchAvailableJobs = async () => {
     if (!appUser?._id) return;
@@ -938,7 +946,7 @@ export default function Dashboard() {
                   activeTab === "active" ? "text-white" : "text-slate-400 hover:text-slate-200"
                 }`}
               >
-                Active ({activeAssignments.filter(a => a.status !== "resolved" && a.status !== "completed").length})
+                Active ({activeAssignments.filter(a => a.status !== "resolved").length})
               </button>
               <button
                 type="button"
@@ -947,7 +955,7 @@ export default function Dashboard() {
                   activeTab === "completed" ? "text-white" : "text-slate-400 hover:text-slate-200"
                 }`}
               >
-                Completed ({activeAssignments.filter(a => a.status === "resolved" || a.status === "completed").length})
+                Completed ({activeAssignments.filter(a => a.status === "resolved").length})
               </button>
               <button
                 type="button"
@@ -1170,7 +1178,7 @@ export default function Dashboard() {
                     <p className="text-xs">{error}</p>
                   </div>
                 ) : (() => {
-                  const activeJobsList = activeAssignments.filter(a => a.status !== "resolved" && a.status !== "completed");
+                  const activeJobsList = activeAssignments.filter(a => a.status !== "resolved" );
                   if (activeJobsList.length === 0) {
                     return (
                       /* Elegant Empty State */
@@ -1414,7 +1422,7 @@ export default function Dashboard() {
                     <p className="text-xs">{error}</p>
                   </div>
                 ) : (() => {
-                  const completedJobsList = activeAssignments.filter(a => a.status === "resolved" || a.status === "completed");
+                  const completedJobsList = activeAssignments.filter(a => a.status === "resolved");
                   if (completedJobsList.length === 0) {
                     return (
                       <div className="glass-panel rounded-3xl p-12 text-center shadow-xl max-w-xl mx-auto flex flex-col items-center">
