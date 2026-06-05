@@ -34,9 +34,12 @@ const Hero = () => {
               <ArrowRight size={18} />
             </Link>
 
-            <button className="border border-gray-300 dark:border-slate-700 hover:border-blue-900 dark:hover:border-orange-500 hover:text-blue-900 dark:hover:text-orange-400 bg-white/20 dark:bg-slate-900/10 backdrop-blur-sm transition-all duration-300 px-6 py-3 rounded-4xl font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+            <Link 
+              to="/login"
+              className="border border-gray-300 dark:border-slate-700 hover:border-blue-900 dark:hover:border-orange-500 hover:text-blue-900 dark:hover:text-orange-400 bg-white/20 dark:bg-slate-900/10 backdrop-blur-sm transition-all duration-300 px-6 py-3 rounded-4xl font-semibold text-gray-700 dark:text-gray-300 cursor-pointer no-underline text-center flex justify-center items-center"
+            >
               Become a Worker
-            </button>
+            </Link>
           </div>
         </div>
 
