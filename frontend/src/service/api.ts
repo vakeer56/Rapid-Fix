@@ -1,12 +1,7 @@
 import axios from "axios";
 
 const getBaseURL = () => {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL;
-  }
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  return `${protocol}//${hostname}:3000`;
+  return import.meta.env.VITE_API_BASE_URL || "https://rapid-fix.onrender.com";
 };
 
 const api = axios.create({

@@ -297,12 +297,7 @@ export default function Dashboard() {
     if (!appUser) return;
 
     const getSocketURL = () => {
-      if (import.meta.env.VITE_API_BASE_URL) {
-        return import.meta.env.VITE_API_BASE_URL;
-      }
-      const protocol = window.location.protocol;
-      const hostname = window.location.hostname;
-      return `${protocol}//${hostname}:3000`;
+      return import.meta.env.VITE_API_BASE_URL || "https://rapid-fix.onrender.com";
     };
 
     const socketUrl = getSocketURL();
