@@ -63,10 +63,12 @@ sequenceDiagram
     W->>S: 3. Claims Job (Post request)
     S->>C: 4. Initiates 5-Min Timer & sends request email (WebSockets)
     rect rgb(30, 41, 59)
-        note right of C: Confirmation Window
-        C->>S: 5. Accept / Decline
-        or
-        S->>S: Auto-Accept after 5 minutes
+        note right of C: Confirmation Window (5 Min)
+        alt Customer Decides
+            C->>S: 5a. Accept or Decline
+        else Timeout Expiration
+            S->>S: 5b. Auto-Accept Worker
+        end
     end
     S->>W: 6. Customer confirmed (transmits address)
     W->>S: 7. Clicks "Intimate I will come soon"
