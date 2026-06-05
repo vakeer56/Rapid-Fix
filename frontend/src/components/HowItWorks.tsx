@@ -44,8 +44,7 @@ const HowItWorks = () => {
 
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white leading-tight transition-colors duration-300">
             How
-            <span className="text-blue-900 dark:text-blue-400"> Rapid</span><span className="text-orange-600 dark:text-orange-555">Fix</span>
-            works
+            <span className="text-blue-900 dark:text-blue-400"> Rapid</span><span className="text-orange-600 dark:text-orange-555">Fix</span> works
           </h2>
 
           <p className="text-lg text-gray-600 dark:text-gray-350 leading-relaxed transition-colors duration-300">
